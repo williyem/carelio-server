@@ -17,7 +17,10 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   APP_URL: z.string().url().default('https://carelio.vercel.app'),
   RESEND_API_KEY: z.string().optional().default(''),
-  RESEND_FROM: z.string().default('Carelio <beth.t@example.com>'),
+  RESEND_FROM: z.string().default('Carelio <noreply@henneh.online>'),
+  LIVEKIT_URL: z.string().optional().default(''),
+  LIVEKIT_API_KEY: z.string().optional().default(''),
+  LIVEKIT_API_SECRET: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

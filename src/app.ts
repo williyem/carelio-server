@@ -17,6 +17,7 @@ import doctorsRouter from './modules/doctors/doctors.routes';
 import statsRouter from './modules/stats/stats.routes';
 import vitalsRouter from './modules/vitals/vitals.routes';
 import uploadRouter from './modules/upload/upload.routes';
+import devRouter from './modules/dev/dev.routes';
 import { errorHandler } from './middleware/error-handler';
 import { requestLogger } from './middleware/request-logger';
 import { logger } from './utils/logger';
@@ -47,6 +48,10 @@ export function createApp() {
   app.get('/health', (_req, res) => {
     res.json({ ok: true, service: 'carelio-backend' });
   });
+
+  if (env.NODE_ENV !== 'production') {
+    app.use('/dev', devRouter);
+  }
 
   app.use('/auth', authRouter);
   app.use('/patients', patientsRouter);

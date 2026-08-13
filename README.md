@@ -84,7 +84,7 @@ Patient invites and email OTPs are sent with Resend.
 | Variable | Purpose |
 |----------|---------|
 | `RESEND_API_KEY` | Resend API key (leave empty to log to console only) |
-| `RESEND_FROM` | Sender, e.g. `Carelio <beth.t@example.com>` until a domain is verified |
+| `RESEND_FROM` | Sender, e.g. `Carelio <noreply@henneh.online>` |
 | `APP_URL` | Base URL for invite links (`http://localhost:3000` locally, `https://carelio.vercel.app` in production) |
 
 ### Demo invite flow
@@ -94,10 +94,38 @@ Patient invites and email OTPs are sent with Resend.
 3. Response also includes `inviteLink` for copy-paste.
 4. Open `/patient-invite?token=...` to complete registration.
 
-Sandbox note: `beth.t@example.com` can only send to the email on your Resend account until you verify a custom domain.
+### Test email (dev only)
+
+Check config:
+
+```bash
+curl http://localhost:4000/dev/mail-status
+```
+
+Send a test email:
+
+```bash
+curl -X POST http://localhost:4000/dev/test-email \
+  -H "Content-Type: application/json" \
+  -d '{"to":"your@email.com"}'
+```
+
+If `RESEND_API_KEY` is empty, the route still works but only logs to the backend console.
+
+Verified sending domain: `henneh.online` (`RESEND_FROM=Carelio <noreply@henneh.online>`).
+
+## Video (LiveKit)
+
+Consultation rooms use LiveKit Cloud. Create a free project at https://cloud.livekit.io and set:
+
+| Variable | Purpose |
+|----------|---------|
+| `LIVEKIT_URL` | WebSocket URL, e.g. `wss://your-project.livekit.cloud` |
+| `LIVEKIT_API_KEY` | Project API key |
+| `LIVEKIT_API_SECRET` | Project API secret (reveal/copy in the dashboard; do not paste `••••`) |
+
+Token endpoints: `GET /consultations/:id/token/doctor` and `GET /consultations/:id/token/patient`. Each returns `{ token, code, url }`.
 
 ## Planned later
 
 - Cloudinary uploads
-- LiveKit video tokens
-- SOAP notes / vitals / consultation complete

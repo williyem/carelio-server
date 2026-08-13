@@ -34,6 +34,28 @@ async function sendEmail(params: {
   return { skipped: false as const };
 }
 
+export function getMailStatus() {
+  return {
+    configured: Boolean(env.RESEND_API_KEY),
+    from: env.RESEND_FROM,
+    appUrl: env.APP_URL,
+    mode: env.RESEND_API_KEY ? 'resend' : 'console-only',
+  };
+}
+
+export async function sendTestEmail(to: string) {
+  const subject = 'Carelio test email';
+  const text = `This is a test email from Carelio. APP_URL=${env.APP_URL}`;
+  const html = `
+    <p>This is a <strong>test email</strong> from Carelio.</p>
+    <p>If you received this, Resend is configured correctly.</p>
+    <p>APP_URL: <code>${env.APP_URL}</code></p>
+  `;
+
+  const result = await sendEmail({ to, subject, html, text });
+  return { ...result, ...getMailStatus() };
+}
+
 export async function sendInviteEmail(input: {
   to: string;
   inviteLink: string;

@@ -247,8 +247,6 @@ export async function createAppointment(
     status,
     code,
     telehealth: {
-      doctorToken: `doc_${crypto.randomBytes(16).toString('hex')}`,
-      patientToken: `pat_${crypto.randomBytes(16).toString('hex')}`,
       sessionId,
     },
   });
