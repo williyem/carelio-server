@@ -9,6 +9,7 @@ import {
   cancelSchema,
 } from './schemas';
 import * as appointmentsService from './appointments.service';
+import * as notesService from '../notes/notes.service';
 
 const router = Router();
 const staffAuth = requireAuth('doctor', 'healthAssistant');
@@ -40,6 +41,15 @@ router.get(
   doctorAuth,
   asyncHandler(async (req, res) => {
     const result = await appointmentsService.listRecent(req.auth!);
+    res.json(result);
+  })
+);
+
+router.get(
+  '/:id/note',
+  staffOrPatientAuth,
+  asyncHandler(async (req, res) => {
+    const result = await notesService.getNoteByAppointment(param(req.params.id));
     res.json(result);
   })
 );

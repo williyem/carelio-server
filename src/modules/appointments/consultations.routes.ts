@@ -7,6 +7,8 @@ import { requireAuth } from '../../middleware/auth';
 import { Appointment, Patient, Doctor, HealthAssistant } from '../../models';
 import { AppError } from '../../utils/errors';
 import * as appointmentsService from './appointments.service';
+import * as notesService from '../notes/notes.service';
+import { z } from 'zod';
 import { mintLiveKitToken } from '../livekit/tokens';
 import type { UserRole } from '../../utils/tokens';
 
@@ -123,6 +125,49 @@ router.get(
   callAuth,
   asyncHandler(async (req, res) => {
     const result = await issueCallToken(param(req.params.id), req.auth!);
+    res.json(result);
+  })
+);
+
+const soapSchema = z.object({
+  subjective: z.string().optional().default(''),
+  objective: z.string().optional().default(''),
+  assessment: z.string().optional().default(''),
+  plan: z.string().optional().default(''),
+  action: z.enum(['save', 'approve']).optional(),
+});
+
+router.put(
+  '/notes/:noteId',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const body = soapSchema.parse(req.body);
+    const result = await notesService.updateNote(param(req.params.noteId), body);
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/soap',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const body = soapSchema.parse(req.body);
+    const result = await notesService.upsertSoap(param(req.params.id), {
+      subjective: body.subjective ?? '',
+      objective: body.objective ?? '',
+      assessment: body.assessment ?? '',
+      plan: body.plan ?? '',
+      action: body.action,
+    });
+    res.status(201).json(result);
+  })
+);
+
+router.post(
+  '/:id/complete',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const result = await notesService.completeConsultation(param(req.params.id));
     res.json(result);
   })
 );

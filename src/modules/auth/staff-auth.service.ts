@@ -20,6 +20,7 @@ import {
   revokeAllUserTokens,
   revokeRefreshToken,
 } from './token-service';
+import { serializeStaffProfile } from '../../utils/staff-profile';
 import { sendPasswordResetOtpEmail } from '../mail/resend';
 
 export interface StaffDoc extends Document {
@@ -37,6 +38,20 @@ export interface StaffDoc extends Document {
   resetOtpHash?: string;
   resetOtpExpiresAt?: Date;
   mustResetPassword?: boolean;
+  avatarUrl?: string;
+  title?: string;
+  specialty?: string;
+  clinicName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  timezone?: string;
+  npi?: string;
+  licenseNumber?: string;
+  onboardingCompletedAt?: Date | null;
+  signedAgreementUrl?: string;
+  signedName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,6 +68,7 @@ export function toStaffUser(user: StaffDoc) {
     isActive: user.isActive,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
+    ...serializeStaffProfile(user),
   };
 }
 
@@ -107,12 +123,13 @@ export function createStaffAuthService(opts: {
       };
     }
 
-    if (user.twoFactorEnabled) {
-      return {
-        requires2FA: true,
-        token: signTempToken(user._id.toString(), role, '2fa'),
-      };
-    }
+    // 2FA is temporarily disabled so login issues a session immediately.
+    // if (user.twoFactorEnabled) {
+    //   return {
+    //     requires2FA: true,
+    //     token: signTempToken(user._id.toString(), role, '2fa'),
+    //   };
+    // }
 
     const tokens = await issueTokenPair(user._id.toString(), role);
     return { ...tokens, user: toStaffUser(user) };
@@ -218,8 +235,11 @@ export function createStaffAuthService(opts: {
     await user.save();
     await revokeAllUserTokens(user._id.toString(), role);
 
-    const setupToken = signTempToken(user._id.toString(), role, 'setup');
-    return { requiresSetup: true, setupToken };
+    // 2FA is temporarily disabled — issue a session instead of a setup token.
+    // const setupToken = signTempToken(user._id.toString(), role, 'setup');
+    // return { requiresSetup: true, setupToken };
+    const tokens = await issueTokenPair(user._id.toString(), role);
+    return { ...tokens, user: toStaffUser(user) };
   }
 
   async function refresh(refreshToken: string) {

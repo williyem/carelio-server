@@ -3,6 +3,8 @@ import { asyncHandler } from '../../utils/async-handler';
 import { requireAuth } from '../../middleware/auth';
 import { Doctor } from '../../models';
 import { buildPaginatedResult, parsePagination } from '../../utils/paginate';
+import { param } from '../../utils/params';
+import * as availabilityService from '../availability/availability.service';
 
 const router = Router();
 
@@ -33,6 +35,10 @@ router.get(
           twoFactorEnabled: d.twoFactorEnabled,
           twoFactorSecret: null,
           isActive: d.isActive,
+          avatarUrl: d.avatarUrl || '',
+          title: d.title || '',
+          specialty: d.specialty || '',
+          timezone: d.timezone || 'America/New_York',
           createdAt: d.createdAt.toISOString(),
           updatedAt: d.updatedAt.toISOString(),
         })),
@@ -41,6 +47,20 @@ router.get(
         limit
       )
     );
+  })
+);
+
+router.get(
+  '/:id/availability',
+  requireAuth('doctor', 'healthAssistant', 'patient'),
+  asyncHandler(async (req, res) => {
+    const date =
+      typeof req.query.date === 'string' ? req.query.date : undefined;
+    const result = await availabilityService.getAvailability(
+      param(req.params.id),
+      date
+    );
+    res.json(result);
   })
 );
 

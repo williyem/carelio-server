@@ -1,25 +1,11 @@
 import { Router } from 'express';
-import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
 import { asyncHandler } from '../../utils/async-handler';
 import { AppError } from '../../utils/errors';
-
-const uploadsDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    cb(null, `${Date.now()}-${safe}`);
-  },
-});
+import { uploadBufferToCloudinary } from '../../lib/cloudinary';
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
@@ -33,10 +19,15 @@ router.post(
       throw new AppError('file is required', 400);
     }
 
-    const url = `http://localhost:4000/uploads/${req.file.filename}`;
+    const result = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: 'carelio',
+      filename: `${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`,
+      mimeType: req.file.mimetype,
+    });
+
     res.json({
       success: true,
-      url,
+      url: result.url,
       message: 'File uploaded successfully',
     });
   })

@@ -13,3 +13,13 @@ export {
   type VitalType,
   type VitalStatus,
 } from './Vital';
+export {
+  DoctorAvailability,
+  type IDoctorAvailability,
+} from './DoctorAvailability';
+export {
+  ConsultationNote,
+  type IConsultationNote,
+} from './ConsultationNote';
+export { AccessGrant, type IAccessGrant } from './AccessGrant';
+export { BillingProfile, type IBillingProfile } from './BillingProfile';

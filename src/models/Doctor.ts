@@ -1,8 +1,12 @@
 import { Schema, model, Document } from 'mongoose';
+import {
+  staffProfileSchemaFields,
+  type StaffProfileFields,
+} from '../utils/staff-profile';
 
 export type TwoFactorMethod = 'totp' | 'email';
 
-export interface IDoctor extends Document {
+export interface IDoctor extends Document, StaffProfileFields {
   email: string;
   passwordHash: string;
   firstName: string;
@@ -41,6 +45,7 @@ const doctorSchema = new Schema<IDoctor>(
     isActive: { type: Boolean, default: true },
     resetOtpHash: { type: String },
     resetOtpExpiresAt: { type: Date },
+    ...staffProfileSchemaFields,
   },
   { timestamps: true }
 );
