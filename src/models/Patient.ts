@@ -20,6 +20,8 @@ export interface IPatient extends Document {
   gender: Gender | null;
   address: string | null;
   bloodType: BloodType | null;
+  allergies: string[];
+  chiefComplaint: string | null;
   invitedByDoctorId: Types.ObjectId | null;
   assignedAssistantId: Types.ObjectId | null;
   isRegistrationComplete: boolean;
@@ -28,6 +30,9 @@ export interface IPatient extends Document {
   emailVerified: boolean;
   invitationTokenHash?: string;
   invitationExpiresAt?: Date;
+  verifyPhoneOtpHash?: string;
+  verifyEmailOtpHash?: string;
+  verifyOtpExpiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,14 +44,24 @@ const patientSchema = new Schema<IPatient>(
     phoneNumber: { type: String, default: null, trim: true },
     fullName: { type: String, default: null, trim: true },
     dob: { type: Date, default: null },
-    gender: { type: String, enum: ['male', 'female', 'other'], default: undefined },
+    gender: {
+      type: String,
+      enum: ['male', 'female', 'other'],
+      default: undefined,
+    },
     address: { type: String, default: null },
     bloodType: {
       type: String,
       enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
       default: undefined,
     },
-    invitedByDoctorId: { type: Schema.Types.ObjectId, ref: 'Doctor', default: null },
+    allergies: { type: [String], default: [] },
+    chiefComplaint: { type: String, default: null },
+    invitedByDoctorId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Doctor',
+      default: null,
+    },
     assignedAssistantId: {
       type: Schema.Types.ObjectId,
       ref: 'HealthAssistant',
@@ -58,8 +73,13 @@ const patientSchema = new Schema<IPatient>(
     emailVerified: { type: Boolean, default: false },
     invitationTokenHash: { type: String },
     invitationExpiresAt: { type: Date },
+    verifyPhoneOtpHash: { type: String },
+    verifyEmailOtpHash: { type: String },
+    verifyOtpExpiresAt: { type: Date },
   },
   { timestamps: true }
 );
+
+patientSchema.index({ fullName: 'text', email: 'text', patientId: 'text' });
 
 export const Patient = model<IPatient>('Patient', patientSchema);

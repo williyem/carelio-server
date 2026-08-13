@@ -8,6 +8,7 @@ export interface IHealthAssistant extends Document {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+  staffCode: string;
   twoFactorEnabled: boolean;
   twoFactorMethod?: TwoFactorMethod;
   totpSecret?: string;
@@ -34,6 +35,7 @@ const healthAssistantSchema = new Schema<IHealthAssistant>(
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     phoneNumber: { type: String, required: true, trim: true },
+    staffCode: { type: String, unique: true, sparse: true, trim: true },
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorMethod: { type: String, enum: ['totp', 'email'] },
     totpSecret: { type: String },
@@ -46,6 +48,13 @@ const healthAssistantSchema = new Schema<IHealthAssistant>(
   },
   { timestamps: true }
 );
+
+healthAssistantSchema.pre('save', function () {
+  if (!this.staffCode) {
+    const n = Math.floor(1000 + Math.random() * 9000);
+    this.staffCode = `HA-${n}`;
+  }
+});
 
 export const HealthAssistant = model<IHealthAssistant>(
   'HealthAssistant',

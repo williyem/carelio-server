@@ -1,0 +1,83 @@
+import { Schema, model, Document, Types } from 'mongoose';
+
+export type AppointmentStatus =
+  | 'PENDING_CONFIRMATION'
+  | 'CONFIRMED'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'MISSED';
+
+export interface ITelehealthStub {
+  doctorToken?: string | null;
+  patientToken?: string | null;
+  sessionId?: string | null;
+}
+
+export interface IAppointment extends Document {
+  patientId: Types.ObjectId;
+  doctorId: Types.ObjectId;
+  startTime?: Date;
+  endTime?: Date;
+  isImmediate: boolean;
+  status: AppointmentStatus;
+  code: string;
+  cancellationReason?: string | null;
+  reschedulingReason?: string | null;
+  cancelledBy?: Types.ObjectId | null;
+  cancelledByUserType?: 'doctor' | 'patient' | null;
+  telehealth?: ITelehealthStub;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const appointmentSchema = new Schema<IAppointment>(
+  {
+    patientId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Patient',
+      required: true,
+      index: true,
+    },
+    doctorId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Doctor',
+      required: true,
+      index: true,
+    },
+    startTime: { type: Date },
+    endTime: { type: Date },
+    isImmediate: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: [
+        'PENDING_CONFIRMATION',
+        'CONFIRMED',
+        'COMPLETED',
+        'CANCELLED',
+        'MISSED',
+      ],
+      default: 'CONFIRMED',
+      index: true,
+    },
+    code: { type: String, required: true, unique: true },
+    cancellationReason: { type: String, default: null },
+    reschedulingReason: { type: String, default: null },
+    cancelledBy: { type: Schema.Types.ObjectId, default: null },
+    cancelledByUserType: {
+      type: String,
+      enum: ['doctor', 'patient', null],
+      default: null,
+    },
+    telehealth: {
+      doctorToken: { type: String, default: null },
+      patientToken: { type: String, default: null },
+      sessionId: { type: String, default: null },
+    },
+  },
+  { timestamps: true }
+);
+
+appointmentSchema.index({ startTime: 1 });
+appointmentSchema.index({ doctorId: 1, startTime: 1 });
+
+export const Appointment = model<IAppointment>('Appointment', appointmentSchema);

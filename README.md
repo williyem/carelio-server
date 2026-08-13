@@ -2,33 +2,23 @@
 
 Node.js + TypeScript + Express + MongoDB API for the Carelio MVP.
 
-This increment implements **auth** for doctors, health assistants, and patients, matching the contracts expected by `carelio-mvp`.
-
 ## Stack
 
 - Express + TypeScript
 - MongoDB (Mongoose)
 - JWT access + refresh tokens
-- TOTP 2FA (`otplib`)
 - Zod validation
-
-## Planned (not in this increment)
-
-- **Cloudinary** for image/file uploads (not AWS S3)
-- **LiveKit** for video calls (not Zoom)
-- Appointments, patients CRUD, vitals, consultations
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# ensure MongoDB is running locally or set MONGODB_URI to Atlas
 npm install
 npm run seed
 npm run dev
 ```
 
-Server defaults to `http://localhost:4000`.
+Server: `http://localhost:4000`
 
 ### Seed credentials
 
@@ -36,25 +26,59 @@ Server defaults to `http://localhost:4000`.
 |------|------------|----------|
 | Doctor | `dr.smith@carelio.app` | `Password123!` |
 | Health Assistant | `ha.jones@carelio.app` | `Password123!` |
-| Patient | `PAT-1001` | (login by patient ID only) |
+| Patient | `PAT-1001` | (login by patient ID) |
 
-## Auth routes
+## Auth
 
-- `POST /auth/doctor/register|login|verify-2fa|forgot-password|verify-reset-otp|reset-password|refresh|logout|change-password|setup-2fa|enable-2fa|disable-2fa|regenerate-recovery-codes`
-- `GET /auth/doctor/session`
-- Same under `/auth/assistant/*` for health assistants
-- `POST /auth/patient/login|refresh|logout`
-- `GET /auth/patient/session`
+- `POST /auth/doctor/*` · `POST /auth/assistant/*` · `POST /auth/patient/*`
+- Invites: `POST /auth/doctor/invite-patient`, `POST /auth/assistant/invite-patient`, `POST /auth/patient/invite`
 
-Password-reset OTPs are logged to the server console in development.
+## Patients
 
-## Connect frontend (`carelio-mvp`)
+| Method | Path |
+|--------|------|
+| GET | `/patients` (`search`, `page`, `limit`) |
+| GET | `/patients/assigned` (`assistantId`, `search`, `page`, `limit`) |
+| GET | `/patients/unassigned` |
+| GET | `/patients/:id` |
+| POST | `/patients` (register) |
+| PATCH | `/patients/:id` |
+| DELETE | `/patients/:id` (soft) |
+| POST | `/patients/assign` |
+| DELETE | `/patients/:patientId/unassign` |
+| POST | `/patients/:id/verify/phone\|email\|code` |
+| GET | `/patients/:patientId/appointments` |
 
-In `carelio-mvp/.env`:
+## Profile & stats
+
+| Method | Path |
+|--------|------|
+| GET | `/doctor/profile` |
+| GET | `/health-assistant/profile` |
+| GET | `/stats` |
+
+
+## Appointments
+
+| Method | Path |
+|--------|------|
+| GET | `/appointments` (`status`, `startDate`, `endDate`, `page`, `limit`) |
+| GET | `/appointments/upcoming` |
+| GET | `/appointments/recent` |
+| POST | `/appointments` |
+| PATCH | `/appointments/:id/reschedule` |
+| PATCH | `/appointments/:id/cancel` |
+| GET | `/consultations/appointments/:id` |
+
+## Frontend
 
 ```
 USE_DUMMY_DATA=false
 API_BASE_URL=http://localhost:4000
 ```
 
-Then restart the Next.js app.
+## Planned later
+
+- Cloudinary uploads
+- LiveKit video tokens
+- SOAP notes / vitals / consultation complete
