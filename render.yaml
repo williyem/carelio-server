@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: carelio-backend
+    runtime: node
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm start
+    healthCheckPath: /health
