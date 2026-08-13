@@ -15,6 +15,9 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
   JWT_TEMP_EXPIRES_IN: z.string().default('10m'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  APP_URL: z.string().url().default('https://carelio.vercel.app'),
+  RESEND_API_KEY: z.string().optional().default(''),
+  RESEND_FROM: z.string().default('Carelio <beth.t@example.com>'),
 });
 
 const parsed = envSchema.safeParse(process.env);

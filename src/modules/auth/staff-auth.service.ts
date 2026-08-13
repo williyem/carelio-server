@@ -20,6 +20,7 @@ import {
   revokeAllUserTokens,
   revokeRefreshToken,
 } from './token-service';
+import { sendPasswordResetOtpEmail } from '../mail/resend';
 
 export interface StaffDoc extends Document {
   email: string;
@@ -162,6 +163,14 @@ export function createStaffAuthService(opts: {
       console.log(
         `[dev] ${issuerLabel} password reset OTP for ${email}: ${otp}`
       );
+      try {
+        await sendPasswordResetOtpEmail({ to: email.toLowerCase(), otp });
+      } catch (err) {
+        console.error(
+          `[mail] Password reset email failed for ${email}:`,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
     return { message: 'If that email exists, an OTP has been sent' };
   }

@@ -139,18 +139,6 @@ router.delete(
 );
 
 router.post(
-  '/:id/verify/phone',
-  staffAuth,
-  asyncHandler(async (req, res) => {
-    const result = await patientsService.startVerify(
-      param(req.params.id),
-      'phone'
-    );
-    res.json(result);
-  })
-);
-
-router.post(
   '/:id/verify/email',
   staffAuth,
   asyncHandler(async (req, res) => {

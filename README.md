@@ -46,7 +46,7 @@ Server: `http://localhost:4000`
 | DELETE | `/patients/:id` (soft) |
 | POST | `/patients/assign` |
 | DELETE | `/patients/:patientId/unassign` |
-| POST | `/patients/:id/verify/phone\|email\|code` |
+| POST | `/patients/:id/verify/email\|code` |
 | GET | `/patients/:patientId/appointments` |
 
 ## Profile & stats
@@ -76,6 +76,25 @@ Server: `http://localhost:4000`
 USE_DUMMY_DATA=false
 API_BASE_URL=http://localhost:4000
 ```
+
+## Email (Resend)
+
+Patient invites and email OTPs are sent with Resend.
+
+| Variable | Purpose |
+|----------|---------|
+| `RESEND_API_KEY` | Resend API key (leave empty to log to console only) |
+| `RESEND_FROM` | Sender, e.g. `Carelio <beth.t@example.com>` until a domain is verified |
+| `APP_URL` | Base URL for invite links (`http://localhost:3000` locally, `https://carelio.vercel.app` in production) |
+
+### Demo invite flow
+
+1. Staff invites a patient with an email address.
+2. Backend emails the invite link (or logs it if no API key).
+3. Response also includes `inviteLink` for copy-paste.
+4. Open `/patient-invite?token=...` to complete registration.
+
+Sandbox note: `beth.t@example.com` can only send to the email on your Resend account until you verify a custom domain.
 
 ## Planned later
 

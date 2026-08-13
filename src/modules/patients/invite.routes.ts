@@ -29,7 +29,10 @@ assistantInviteRouter.post(
   asyncHandler(async (req, res) => {
     const body = haInviteSchema.parse(req.body);
     const result = await patientsService.invitePatient(
-      { email: body.email },
+      {
+        email: body.email,
+        phoneNumber: body.phoneNumber,
+      },
       req.auth!
     );
     res.status(201).json(result);

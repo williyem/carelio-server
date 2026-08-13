@@ -12,6 +12,11 @@ import {
 import { generateOtp, hashToken } from '../../utils/passwords';
 import { serializePatient } from '../../serializers/patient.serializer';
 import { logger } from '../../utils/logger';
+import { env } from '../../config/env';
+import {
+  sendInviteEmail,
+  sendVerificationOtpEmail,
+} from '../mail/resend';
 import type { UserRole } from '../../utils/tokens';
 
 function escapeRegex(s: string): string {
@@ -258,16 +263,14 @@ export async function unassignPatient(patientId: string) {
 }
 
 export async function invitePatient(
-  input: { email?: string; phoneNumber?: string },
+  input: { email: string; phoneNumber?: string },
   auth: { id: string; role: UserRole }
 ) {
-  const email = input.email?.toLowerCase();
+  const email = input.email.toLowerCase();
   const phoneNumber = input.phoneNumber;
 
-  if (email) {
-    const existing = await Patient.findOne({ email });
-    if (existing) throw new AppError('Patient with this email already exists', 409);
-  }
+  const existing = await Patient.findOne({ email });
+  if (existing) throw new AppError('Patient with this email already exists', 409);
 
   let patientId = generatePatientId();
   while (await Patient.exists({ patientId })) {
@@ -277,7 +280,7 @@ export async function invitePatient(
   const invitationToken = generateInviteToken();
   const patient = await Patient.create({
     patientId,
-    email: email ?? null,
+    email,
     phoneNumber: phoneNumber ?? null,
     fullName: null,
     invitedByDoctorId:
@@ -292,50 +295,70 @@ export async function invitePatient(
     invitationExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
-  const inviteLink = `http://localhost:3000/patient-invite?token=${invitationToken}`;
+  const inviteLink = `${env.APP_URL.replace(/\/$/, '')}/patient-invite?token=${invitationToken}`;
   logger.info(`[dev] Patient invite token for ${patientId}: ${invitationToken}`);
+
+  try {
+    await sendInviteEmail({ to: email, inviteLink });
+  } catch (err) {
+    logger.error(
+      `[mail] Invite email failed for ${email}: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
 
   return {
     message: 'Patient invited successfully',
     patientId: patient.patientId,
     inviteLink,
-    invitationMethod: email ? 'email' : 'phone',
-    invitationToken,
+    invitationMethod: 'email' as const,
+    invitationToken:
+      env.NODE_ENV === 'production' ? undefined : invitationToken,
     patient: serializePatient(patient),
   };
 }
 
-export async function startVerify(
-  id: string,
-  type: 'phone' | 'email'
-) {
+export async function startVerify(id: string, type: 'email') {
   const patient = await findPatientByIdOrCode(id);
   if (!patient) throw new AppError('Patient not found', 404);
+  if (!patient.email) {
+    throw new AppError('Patient has no email on file', 400);
+  }
 
   const otp = generateOtp(6);
   const hash = hashToken(otp);
   patient.verifyOtpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  if (type === 'phone') patient.verifyPhoneOtpHash = hash;
-  else patient.verifyEmailOtpHash = hash;
+  patient.verifyEmailOtpHash = hash;
   await patient.save();
 
   logger.info(
-    `[dev] Patient ${patient.patientId} ${type} verification OTP: ${otp}`
+    `[dev] Patient ${patient.patientId} email verification OTP: ${otp}`
   );
+
+  try {
+    await sendVerificationOtpEmail({ to: patient.email, otp });
+  } catch (err) {
+    logger.error(
+      `[mail] Verification OTP email failed for ${patient.email}: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
 
   return {
     id: patient._id.toString(),
     patientId: patient.patientId,
     phoneVerified: patient.phoneVerified,
     emailVerified: patient.emailVerified,
-    message: `Verification code sent via ${type}`,
+    message: 'Verification code sent via email',
   };
 }
 
 export async function confirmVerify(
   id: string,
   code: string,
-  type: 'phone' | 'email'
+  type: 'email'
 ) {
   const patient = await findPatientByIdOrCode(id);
   if (!patient) throw new AppError('Patient not found', 404);
@@ -347,19 +370,15 @@ export async function confirmVerify(
     throw new AppError('Verification code expired', 400);
   }
 
-  const expected =
-    type === 'phone' ? patient.verifyPhoneOtpHash : patient.verifyEmailOtpHash;
-  if (!expected || expected !== hashToken(code)) {
+  if (
+    !patient.verifyEmailOtpHash ||
+    patient.verifyEmailOtpHash !== hashToken(code)
+  ) {
     throw new AppError('Invalid verification code', 400);
   }
 
-  if (type === 'phone') {
-    patient.phoneVerified = true;
-    patient.verifyPhoneOtpHash = undefined;
-  } else {
-    patient.emailVerified = true;
-    patient.verifyEmailOtpHash = undefined;
-  }
+  patient.emailVerified = true;
+  patient.verifyEmailOtpHash = undefined;
   patient.verifyOtpExpiresAt = undefined;
   await patient.save();
 
@@ -370,5 +389,3 @@ export async function confirmVerify(
     emailVerified: patient.emailVerified,
   };
 }
-
-// silence unused import if Doctor not used

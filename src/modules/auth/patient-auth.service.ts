@@ -65,7 +65,7 @@ export async function verifyInvitation(token: string) {
   return {
     email: patient.email,
     phoneNumber: patient.phoneNumber,
-    invitationMethod: patient.email ? ('email' as const) : ('phone' as const),
+    invitationMethod: 'email' as const,
     doctorName,
     fullName: patient.fullName ?? '',
     dob: patient.dob ? patient.dob.toISOString().slice(0, 10) : '',

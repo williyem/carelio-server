@@ -44,21 +44,18 @@ export const assignPatientSchema = z.object({
   assistantId: z.string().min(1),
 });
 
-export const doctorInviteSchema = z
-  .object({
-    email: z.string().email().optional(),
-    phoneNumber: z.string().min(5).optional(),
-    phone: z.string().min(5).optional(),
-  })
-  .refine((d) => d.email || d.phoneNumber || d.phone, {
-    message: 'email or phoneNumber is required',
-  });
+export const doctorInviteSchema = z.object({
+  email: z.string().email(),
+  phoneNumber: z.string().min(5).optional(),
+  phone: z.string().min(5).optional(),
+});
 
 export const haInviteSchema = z.object({
   email: z.string().email(),
+  phoneNumber: z.string().min(5).optional(),
 });
 
 export const verifyCodeSchema = z.object({
   code: z.string().min(4),
-  type: z.enum(['phone', 'email']),
+  type: z.literal('email'),
 });
