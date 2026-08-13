@@ -33,6 +33,13 @@ export interface IPatient extends Document {
   verifyPhoneOtpHash?: string;
   verifyEmailOtpHash?: string;
   verifyOtpExpiresAt?: Date;
+  agreements: {
+    type: string;
+    signatureUrl: string;
+    documentUrl: string;
+    signedAt: Date;
+  }[];
+  consentCompletedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -76,6 +83,18 @@ const patientSchema = new Schema<IPatient>(
     verifyPhoneOtpHash: { type: String },
     verifyEmailOtpHash: { type: String },
     verifyOtpExpiresAt: { type: Date },
+    agreements: {
+      type: [
+        {
+          type: { type: String, required: true },
+          signatureUrl: { type: String, required: true },
+          documentUrl: { type: String, required: true },
+          signedAt: { type: Date, required: true },
+        },
+      ],
+      default: [],
+    },
+    consentCompletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

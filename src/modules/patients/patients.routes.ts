@@ -9,7 +9,9 @@ import {
   assignPatientSchema,
   verifyCodeSchema,
 } from './schemas';
+import { consentAgreementsSchema } from '../auth/schemas';
 import * as patientsService from './patients.service';
+import { saveAgreements } from '../auth/patient-auth.service';
 import patientAppointmentsRouter from '../appointments/patient-appointments.routes';
 
 const router = Router();
@@ -63,6 +65,29 @@ router.post(
 );
 
 router.post(
+  '/agreements',
+  asyncHandler(async (req, res) => {
+    const body = consentAgreementsSchema.parse(req.body);
+    const result = await saveAgreements(body);
+    res.json(result);
+  })
+);
+
+router.post(
+  '/consent/agree',
+  asyncHandler(async (req, res) => {
+    const tokenFromQuery =
+      typeof req.query.token === 'string' ? req.query.token : undefined;
+    const body = consentAgreementsSchema.parse({
+      ...req.body,
+      token: req.body?.token || tokenFromQuery,
+    });
+    const result = await saveAgreements(body);
+    res.json(result);
+  })
+);
+
+router.post(
   '/',
   staffAuth,
   asyncHandler(async (req, res) => {
@@ -106,7 +131,9 @@ router.delete(
   '/:patientId/unassign',
   staffAuth,
   asyncHandler(async (req, res) => {
-    const result = await patientsService.unassignPatient(param(req.params.patientId));
+    const result = await patientsService.unassignPatient(
+      param(req.params.patientId)
+    );
     res.json(result);
   })
 );
@@ -115,7 +142,10 @@ router.post(
   '/:id/verify/phone',
   staffAuth,
   asyncHandler(async (req, res) => {
-    const result = await patientsService.startVerify(param(req.params.id), 'phone');
+    const result = await patientsService.startVerify(
+      param(req.params.id),
+      'phone'
+    );
     res.json(result);
   })
 );
@@ -124,7 +154,10 @@ router.post(
   '/:id/verify/email',
   staffAuth,
   asyncHandler(async (req, res) => {
-    const result = await patientsService.startVerify(param(req.params.id), 'email');
+    const result = await patientsService.startVerify(
+      param(req.params.id),
+      'email'
+    );
     res.json(result);
   })
 );

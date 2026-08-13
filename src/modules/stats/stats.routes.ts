@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import { requireAuth } from '../../middleware/auth';
-import { Appointment, Patient } from '../../models';
+import { Appointment, Patient, HealthAssistant } from '../../models';
 import { Types } from 'mongoose';
 
 const router = Router();
@@ -10,18 +10,29 @@ router.get(
   '/',
   requireAuth('doctor', 'healthAssistant'),
   asyncHandler(async (req, res) => {
+    if (req.auth!.role === 'healthAssistant') {
+      const [totalMedicalAssistants, totalPatients, unassignedPatients] =
+        await Promise.all([
+          HealthAssistant.countDocuments({ isActive: true }),
+          Patient.countDocuments({ isActive: true }),
+          Patient.countDocuments({ isActive: true, assignedAssistantId: null }),
+        ]);
+
+      res.json({
+        totalMedicalAssistants,
+        totalPatients,
+        unassignedPatients,
+      });
+      return;
+    }
+
     const now = new Date();
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(now);
     endOfDay.setHours(23, 59, 59, 999);
-
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const doctorFilter =
-      req.auth!.role === 'doctor'
-        ? { doctorId: new Types.ObjectId(req.auth!.id) }
-        : {};
+    const doctorFilter = { doctorId: new Types.ObjectId(req.auth!.id) };
 
     const [
       totalPatients,

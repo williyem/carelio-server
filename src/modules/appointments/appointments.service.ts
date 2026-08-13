@@ -1,4 +1,5 @@
 import { Types } from "mongoose";
+import crypto from "crypto";
 import { Appointment, Patient, Doctor, IAppointment } from "../../models";
 import { AppError } from "../../utils/errors";
 import { buildPaginatedResult, parsePagination } from "../../utils/paginate";
@@ -220,6 +221,7 @@ export async function createAppointment(
     code = generateAppointmentCode();
   }
 
+  const sessionId = `sess_${crypto.randomBytes(8).toString('hex')}`;
   const apt = await Appointment.create({
     patientId: patientObjectId,
     doctorId: new Types.ObjectId(doctorId),
@@ -229,9 +231,9 @@ export async function createAppointment(
     status,
     code,
     telehealth: {
-      doctorToken: null,
-      patientToken: null,
-      sessionId: null,
+      doctorToken: `doc_${crypto.randomBytes(16).toString('hex')}`,
+      patientToken: `pat_${crypto.randomBytes(16).toString('hex')}`,
+      sessionId,
     },
   });
 

@@ -7,3 +7,9 @@ export {
   type IAppointment,
   type AppointmentStatus,
 } from './Appointment';
+export {
+  Vital,
+  type IVital,
+  type VitalType,
+  type VitalStatus,
+} from './Vital';

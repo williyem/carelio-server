@@ -59,3 +59,27 @@ export const regenerateRecoverySchema = z.object({
 export const patientLoginSchema = z.object({
   patientId: z.string().min(1),
 });
+
+export const completeRegistrationSchema = z.object({
+  token: z.string().min(1),
+  fullName: z.string().min(1),
+  dob: z.string().min(1),
+  gender: z.enum(['male', 'female', 'other']),
+  phoneNumber: z.string().min(5),
+  address: z.string().min(1),
+  bloodType: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']),
+  email: z.string().email().optional(),
+});
+
+export const consentAgreementsSchema = z.object({
+  token: z.string().min(1),
+  agreements: z
+    .array(
+      z.object({
+        type: z.string().min(1),
+        signatureUrl: z.string().min(1),
+        documentUrl: z.string().min(1),
+      })
+    )
+    .min(1),
+});
