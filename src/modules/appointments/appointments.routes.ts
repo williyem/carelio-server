@@ -12,6 +12,7 @@ import * as appointmentsService from './appointments.service';
 
 const router = Router();
 const staffAuth = requireAuth('doctor', 'healthAssistant');
+const staffOrPatientAuth = requireAuth('doctor', 'healthAssistant', 'patient');
 const doctorAuth = requireAuth('doctor');
 
 router.get(
@@ -45,7 +46,7 @@ router.get(
 
 router.post(
   '/',
-  staffAuth,
+  staffOrPatientAuth,
   asyncHandler(async (req, res) => {
     const body = createAppointmentSchema.parse(req.body);
     const result = await appointmentsService.createAppointment(body, req.auth!);

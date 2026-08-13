@@ -176,7 +176,23 @@ export async function createAppointment(
   },
   auth: { id: string; role: UserRole },
 ) {
-  const patientObjectId = await resolvePatientObjectId(input.patientId);
+  let patientObjectId: Types.ObjectId;
+  if (auth.role === "patient") {
+    const self = await Patient.findById(auth.id);
+    if (!self) throw new AppError("Unauthorized", 401);
+    if (
+      input.patientId !== self._id.toString() &&
+      input.patientId !== self.patientId
+    ) {
+      throw new AppError(
+        "Patients can only schedule their own appointments",
+        403,
+      );
+    }
+    patientObjectId = self._id as Types.ObjectId;
+  } else {
+    patientObjectId = await resolvePatientObjectId(input.patientId);
+  }
 
   let doctorId: string;
   if (auth.role === "doctor") {

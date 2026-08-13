@@ -8,7 +8,7 @@ const router = Router();
 
 router.get(
   '/',
-  requireAuth('doctor', 'healthAssistant'),
+  requireAuth('doctor', 'healthAssistant', 'patient'),
   asyncHandler(async (req, res) => {
     const { page, limit, skip } = parsePagination(req.query);
     const filter = { isActive: true };
