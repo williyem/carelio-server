@@ -77,6 +77,18 @@ export function serializePatient(patient: IPatient) {
     isRegistrationComplete: patient.isRegistrationComplete,
     createdAt: iso(patient.createdAt),
     updatedAt: iso(patient.updatedAt),
+    avatarUrl: patient.avatarUrl || '',
+    insurance: (patient.insurance ?? []).map((policy) => ({
+      id: policy._id?.toString() || '',
+      provider: policy.provider,
+      memberId: policy.memberId,
+      groupId: policy.groupId || '',
+      holderName: policy.holderName || '',
+      effectiveDate: policy.effectiveDate || '',
+      expirationDate: policy.expirationDate || '',
+      isDefault: Boolean(policy.isDefault),
+      cardImageUrl: policy.cardImageUrl || '',
+    })),
     ...(assignedAssistant ? { assignedAssistant } : {}),
   };
 }

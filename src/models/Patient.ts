@@ -40,6 +40,18 @@ export interface IPatient extends Document {
     signedAt: Date;
   }[];
   consentCompletedAt?: Date | null;
+  avatarUrl?: string;
+  insurance: {
+    _id?: Types.ObjectId;
+    provider: string;
+    memberId: string;
+    groupId: string;
+    holderName: string;
+    effectiveDate: string;
+    expirationDate: string;
+    isDefault: boolean;
+    cardImageUrl?: string;
+  }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -95,6 +107,22 @@ const patientSchema = new Schema<IPatient>(
       default: [],
     },
     consentCompletedAt: { type: Date, default: null },
+    avatarUrl: { type: String, default: '' },
+    insurance: {
+      type: [
+        {
+          provider: { type: String, required: true },
+          memberId: { type: String, required: true },
+          groupId: { type: String, default: '' },
+          holderName: { type: String, default: '' },
+          effectiveDate: { type: String, default: '' },
+          expirationDate: { type: String, default: '' },
+          isDefault: { type: Boolean, default: false },
+          cardImageUrl: { type: String, default: '' },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

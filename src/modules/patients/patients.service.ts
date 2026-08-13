@@ -217,8 +217,11 @@ export async function updatePatient(
       input.chiefComplaint === null ? null : String(input.chiefComplaint);
   }
   if (typeof input.isActive === 'boolean') patient.isActive = input.isActive;
-  if (typeof input.isRegistrationComplete === 'boolean') {
+    if (typeof input.isRegistrationComplete === 'boolean') {
     patient.isRegistrationComplete = input.isRegistrationComplete;
+  }
+  if (typeof input.avatarUrl === 'string') {
+    patient.avatarUrl = input.avatarUrl;
   }
 
   await patient.save();

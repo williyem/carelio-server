@@ -1,8 +1,12 @@
 import { Schema, model, Document } from 'mongoose';
+import {
+  staffProfileSchemaFields,
+  type StaffProfileFields,
+} from '../utils/staff-profile';
 
 export type TwoFactorMethod = 'totp' | 'email';
 
-export interface IHealthAssistant extends Document {
+export interface IHealthAssistant extends Document, StaffProfileFields {
   email: string;
   passwordHash: string;
   firstName: string;
@@ -45,6 +49,7 @@ const healthAssistantSchema = new Schema<IHealthAssistant>(
     mustResetPassword: { type: Boolean, default: false },
     resetOtpHash: { type: String },
     resetOtpExpiresAt: { type: Date },
+    ...staffProfileSchemaFields,
   },
   { timestamps: true }
 );
