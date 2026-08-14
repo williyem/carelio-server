@@ -110,7 +110,7 @@ export async function getAvailability(doctorId: string, date?: string) {
 
   const busy = await Appointment.find({
     doctorId: new Types.ObjectId(doctorId),
-    status: { $in: ['PENDING_CONFIRMATION', 'CONFIRMED', 'COMPLETED'] },
+        status: { $in: ['PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] },
     startTime: { $lt: dayEnd },
     endTime: { $gt: dayStart },
   }).select('startTime endTime');

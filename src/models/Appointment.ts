@@ -3,6 +3,7 @@ import { Schema, model, Document, Types } from 'mongoose';
 export type AppointmentStatus =
   | 'PENDING_CONFIRMATION'
   | 'CONFIRMED'
+  | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED'
   | 'MISSED';
@@ -71,6 +72,7 @@ const appointmentSchema = new Schema<IAppointment>(
       enum: [
         'PENDING_CONFIRMATION',
         'CONFIRMED',
+        'IN_PROGRESS',
         'COMPLETED',
         'CANCELLED',
         'MISSED',

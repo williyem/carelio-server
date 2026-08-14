@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/errors';
 import { verifyAccessToken, UserRole } from '../utils/tokens';
+import { env } from '../config/env';
 
 export interface AuthUser {
   id: string;
@@ -33,4 +34,31 @@ export function requireAuth(...roles: UserRole[]) {
       next(new AppError('Unauthorized', 401));
     }
   };
+}
+
+export function requireCronSecret(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) {
+  const secret = env.CRON_SECRET;
+  if (!secret) {
+    if (env.NODE_ENV === 'production') {
+      next(new AppError('Unauthorized', 401));
+      return;
+    }
+    next();
+    return;
+  }
+
+  const header = req.headers.authorization;
+  const bearer = header?.startsWith('Bearer ') ? header.slice(7) : '';
+  const headerSecret = req.headers['x-cron-secret'];
+  const provided = bearer || (typeof headerSecret === 'string' ? headerSecret : '');
+
+  if (provided !== secret) {
+    next(new AppError('Unauthorized', 401));
+    return;
+  }
+  next();
 }

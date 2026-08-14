@@ -66,7 +66,7 @@ async function findAppointmentForToken(id: string) {
 
   appointment = await Appointment.findOne({
     patientId: patientObjectId,
-    status: { $in: ['CONFIRMED', 'PENDING_CONFIRMATION'] },
+    status: { $in: ['CONFIRMED', 'PENDING_CONFIRMATION', 'IN_PROGRESS'] },
   }).sort({ startTime: 1 });
 
   if (!appointment) {
@@ -139,6 +139,17 @@ router.get(
   })
 );
 
+const sharePlanSchema = z.object({
+  recipients: z
+    .array(z.enum(['patient', 'healthAssistant']))
+    .min(1)
+    .optional(),
+  fields: z
+    .array(z.enum(['subjective', 'objective', 'assessment', 'plan']))
+    .min(1)
+    .optional(),
+});
+
 const soapSchema = z.object({
   subjective: z.string().optional().default(''),
   objective: z.string().optional().default(''),
@@ -149,7 +160,7 @@ const soapSchema = z.object({
 
 router.put(
   '/notes/:noteId',
-  staffAuth,
+  doctorAuth,
   asyncHandler(async (req, res) => {
     const body = soapSchema.parse(req.body);
     const result = await notesService.updateNote(param(req.params.noteId), body);
@@ -159,7 +170,7 @@ router.put(
 
 router.post(
   '/:id/soap',
-  staffAuth,
+  doctorAuth,
   asyncHandler(async (req, res) => {
     const body = soapSchema.parse(req.body);
     const result = await notesService.upsertSoap(param(req.params.id), {
@@ -174,8 +185,29 @@ router.post(
 );
 
 router.post(
+  '/:id/note/share',
+  doctorAuth,
+  asyncHandler(async (req, res) => {
+    const body = sharePlanSchema.parse(req.body ?? {});
+    const result = await notesService.sharePlan(param(req.params.id), body);
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/start',
+  callAuth,
+  asyncHandler(async (req, res) => {
+    const result = await appointmentsService.startConsultation(
+      param(req.params.id)
+    );
+    res.json(result);
+  })
+);
+
+router.post(
   '/:id/complete',
-  staffAuth,
+  doctorAuth,
   asyncHandler(async (req, res) => {
     const result = await notesService.completeConsultation(param(req.params.id));
     res.json(result);

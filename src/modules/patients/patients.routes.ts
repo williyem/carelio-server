@@ -286,7 +286,8 @@ router.get(
     const query = searchQuerySchema.parse(req.query);
     const result = await notesService.listPatientNotes(
       param(req.params.patientId),
-      query
+      query,
+      req.auth?.role
     );
     res.json(result);
   })

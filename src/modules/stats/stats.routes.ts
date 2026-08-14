@@ -45,7 +45,7 @@ router.get(
       Patient.countDocuments({ isActive: true }),
       Appointment.countDocuments({
         ...doctorFilter,
-        status: { $in: ['CONFIRMED', 'PENDING_CONFIRMATION'] },
+        status: { $in: ['CONFIRMED', 'PENDING_CONFIRMATION', 'IN_PROGRESS'] },
       }),
       Appointment.countDocuments({
         ...doctorFilter,

@@ -7,11 +7,13 @@ export const listAppointmentsQuerySchema = z.object({
     .enum([
       'PENDING_CONFIRMATION',
       'CONFIRMED',
+      'IN_PROGRESS',
       'COMPLETED',
       'CANCELLED',
       'MISSED',
     ])
     .optional(),
+  upcoming: z.enum(['true', 'false']).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
