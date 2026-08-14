@@ -11,9 +11,19 @@ import * as notesService from '../notes/notes.service';
 import { z } from 'zod';
 import { mintLiveKitToken } from '../livekit/tokens';
 import type { UserRole } from '../../utils/tokens';
+import { extractMeasurements } from '../clinical-intelligence/clinical-intelligence.service';
+import * as measurementRequestsService from '../clinical-intelligence/measurement-requests.service';
+import {
+  confirmRequestsSchema,
+  createRequestsSchema,
+  deviceCaptureSchema,
+  extractMeasurementsSchema,
+  respondRequestSchema,
+} from '../clinical-intelligence/schemas';
 
 const router = Router();
 const staffAuth = requireAuth('doctor', 'healthAssistant');
+const doctorAuth = requireAuth('doctor');
 const callAuth = requireAuth('doctor', 'healthAssistant', 'patient');
 
 function ensureSessionId(apt: {
@@ -168,6 +178,99 @@ router.post(
   staffAuth,
   asyncHandler(async (req, res) => {
     const result = await notesService.completeConsultation(param(req.params.id));
+    res.json(result);
+  })
+);
+
+router.patch(
+  '/:id/device-capture',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const body = deviceCaptureSchema.parse(req.body);
+    const result = await measurementRequestsService.setDeviceCaptureEnabled(
+      param(req.params.id),
+      body.enabled,
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/extract-measurements',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const body = extractMeasurementsSchema.parse(req.body);
+    const extracted = await extractMeasurements(body.text);
+    const result = await measurementRequestsService.upsertSuggestedRequests(
+      param(req.params.id),
+      extracted.measurements.map((item) => ({
+        vitalType: item.vitalType,
+        label: item.label,
+        source: extracted.strategy === 'ai' ? 'ai' : 'rules',
+      })),
+      req.auth!
+    );
+    res.json({
+      ...result,
+      strategy: extracted.strategy,
+      degraded: extracted.degraded,
+    });
+  })
+);
+
+router.get(
+  '/:id/measurement-requests',
+  callAuth,
+  asyncHandler(async (req, res) => {
+    const result = await measurementRequestsService.getMeasurementState(
+      param(req.params.id),
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/measurement-requests',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const body = confirmRequestsSchema.parse(req.body);
+    const result = await measurementRequestsService.confirmMeasurementRequests(
+      param(req.params.id),
+      body.requestIds,
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/measurement-requests/manual',
+  doctorAuth,
+  asyncHandler(async (req, res) => {
+    const body = createRequestsSchema.parse(req.body);
+    const result = await measurementRequestsService.createManualRequests(
+      param(req.params.id),
+      body.vitalTypes,
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.patch(
+  '/:id/measurement-requests/:requestId',
+  callAuth,
+  asyncHandler(async (req, res) => {
+    const body = respondRequestSchema.parse(req.body);
+    const result = await measurementRequestsService.respondToMeasurementRequest(
+      param(req.params.id),
+      param(req.params.requestId),
+      body.status,
+      body.patientResponse,
+      req.auth!
+    );
     res.json(result);
   })
 );

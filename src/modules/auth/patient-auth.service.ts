@@ -18,6 +18,7 @@ function toPatientUser(patient: {
   address: string | null;
   bloodType: string | null;
   patientId: string;
+  isRegistrationComplete: boolean;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -31,6 +32,7 @@ function toPatientUser(patient: {
     phoneNumber: patient.phoneNumber ?? '',
     address: patient.address ?? '',
     bloodType: patient.bloodType ?? 'O+',
+    isRegistrationComplete: Boolean(patient.isRegistrationComplete),
     createdAt: patient.createdAt.toISOString(),
     updatedAt: patient.updatedAt.toISOString(),
   };
@@ -160,6 +162,39 @@ export async function saveAgreements(input: {
   return {
     message: 'Agreements saved successfully',
     patientId: patient.patientId,
+  };
+}
+
+export async function saveAuthenticatedAgreements(
+  userId: string,
+  agreements: {
+    type: string;
+    signatureUrl: string;
+    documentUrl: string;
+  }[]
+) {
+  const patient = await Patient.findById(userId);
+  if (!patient || !patient.isActive) {
+    throw new AppError('Patient not found', 404);
+  }
+
+  const now = new Date();
+  const incoming = agreements.map((a) => ({
+    type: a.type,
+    signatureUrl: a.signatureUrl,
+    documentUrl: a.documentUrl,
+    signedAt: now,
+  }));
+
+  patient.agreements = [...(patient.agreements ?? []), ...incoming];
+  patient.consentCompletedAt = now;
+  patient.isRegistrationComplete = true;
+  await patient.save();
+
+  return {
+    message: 'Agreements saved successfully',
+    patientId: patient.patientId,
+    user: toPatientUser(patient),
   };
 }
 

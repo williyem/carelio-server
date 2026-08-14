@@ -11,7 +11,7 @@ import {
 } from './schemas';
 import { consentAgreementsSchema } from '../auth/schemas';
 import * as patientsService from './patients.service';
-import { saveAgreements } from '../auth/patient-auth.service';
+import { saveAgreements, saveAuthenticatedAgreements } from '../auth/patient-auth.service';
 import patientAppointmentsRouter from '../appointments/patient-appointments.routes';
 import * as notesService from '../notes/notes.service';
 import * as accessService from '../access/access.service';
@@ -47,6 +47,24 @@ const mePatchSchema = z.object({
   fullName: z.string().optional(),
   address: z.string().optional(),
   phoneNumber: z.string().optional(),
+  dob: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
+  bloodType: z
+    .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
+    .optional(),
+  isRegistrationComplete: z.boolean().optional(),
+});
+
+const meAgreementsSchema = z.object({
+  agreements: z
+    .array(
+      z.object({
+        type: z.string().min(1),
+        signatureUrl: z.string().min(1),
+        documentUrl: z.string().min(1),
+      })
+    )
+    .min(1),
 });
 
 router.get(
@@ -149,6 +167,19 @@ router.patch(
     const result = await patientsService.updatePatient(req.auth!.id, {
       ...body,
     });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/me/agreements',
+  patientAuth,
+  asyncHandler(async (req, res) => {
+    const body = meAgreementsSchema.parse(req.body);
+    const result = await saveAuthenticatedAgreements(
+      req.auth!.id,
+      body.agreements
+    );
     res.json(result);
   })
 );

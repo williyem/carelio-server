@@ -13,6 +13,23 @@ export interface ITelehealthStub {
   sessionId?: string | null;
 }
 
+export interface IMeasurementRequest {
+  id: string;
+  vitalType: string;
+  label: string;
+  source: 'ai' | 'rules' | 'manual';
+  status:
+    | 'suggested'
+    | 'requested'
+    | 'acknowledged'
+    | 'no_device'
+    | 'completed'
+    | 'cancelled';
+  patientResponse?: string | null;
+  requestedAt?: Date;
+  respondedAt?: Date;
+}
+
 export interface IAppointment extends Document {
   patientId: Types.ObjectId;
   doctorId: Types.ObjectId;
@@ -26,6 +43,8 @@ export interface IAppointment extends Document {
   cancelledBy?: Types.ObjectId | null;
   cancelledByUserType?: 'doctor' | 'patient' | null;
   telehealth?: ITelehealthStub;
+  deviceCaptureEnabled?: boolean;
+  measurementRequests?: IMeasurementRequest[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -72,6 +91,37 @@ const appointmentSchema = new Schema<IAppointment>(
       doctorToken: { type: String, default: null },
       patientToken: { type: String, default: null },
       sessionId: { type: String, default: null },
+    },
+    deviceCaptureEnabled: { type: Boolean, default: true },
+    measurementRequests: {
+      type: [
+        {
+          id: { type: String, required: true },
+          vitalType: { type: String, required: true },
+          label: { type: String, required: true },
+          source: {
+            type: String,
+            enum: ['ai', 'rules', 'manual'],
+            required: true,
+          },
+          status: {
+            type: String,
+            enum: [
+              'suggested',
+              'requested',
+              'acknowledged',
+              'no_device',
+              'completed',
+              'cancelled',
+            ],
+            required: true,
+          },
+          patientResponse: { type: String, default: null },
+          requestedAt: { type: Date },
+          respondedAt: { type: Date },
+        },
+      ],
+      default: [],
     },
   },
   { timestamps: true }

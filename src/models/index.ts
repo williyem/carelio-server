@@ -5,6 +5,7 @@ export { RefreshToken, type IRefreshToken } from './RefreshToken';
 export {
   Appointment,
   type IAppointment,
+  type IMeasurementRequest,
   type AppointmentStatus,
 } from './Appointment';
 export {
