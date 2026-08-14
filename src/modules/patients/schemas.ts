@@ -31,6 +31,15 @@ export const updatePatientSchema = z
       .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
       .optional(),
     allergies: z.array(z.string()).optional(),
+    medications: z.array(z.string()).optional(),
+    conditions: z.array(z.string()).optional(),
+    emergencyContact: z
+      .object({
+        name: z.string().optional(),
+        relationship: z.string().optional(),
+        phone: z.string().optional(),
+      })
+      .optional(),
     chiefComplaint: z.string().nullable().optional(),
     isActive: z.boolean().optional(),
     isRegistrationComplete: z.boolean().optional(),

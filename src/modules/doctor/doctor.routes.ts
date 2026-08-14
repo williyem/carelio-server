@@ -5,7 +5,10 @@ import { requireAuth } from '../../middleware/auth';
 import { Doctor } from '../../models';
 import { AppError } from '../../utils/errors';
 import { toStaffUser } from '../auth/staff-auth.service';
-import { applyStaffProfilePatch } from '../../utils/staff-profile';
+import {
+  applyStaffProfilePatch,
+  DAYS_OF_WEEK,
+} from '../../utils/staff-profile';
 import * as availabilityService from '../availability/availability.service';
 import * as billingService from '../billing/billing.service';
 
@@ -34,15 +37,15 @@ const profilePatchSchema = z
     message: 'At least one field is required',
   });
 
+const timeRangeSchema = z.object({
+  start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/),
+  end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/),
+});
+
 const availabilitySchema = z.object({
   timezone: z.string().optional(),
   enabled: z.boolean().optional(),
-  days: z
-    .record(
-      z.string(),
-      z.array(z.object({ start: z.string(), end: z.string() }))
-    )
-    .optional(),
+  days: z.record(z.enum(DAYS_OF_WEEK), z.array(timeRangeSchema)).optional(),
 });
 
 const onboardingSchema = z.object({

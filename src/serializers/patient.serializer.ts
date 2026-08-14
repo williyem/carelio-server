@@ -38,7 +38,10 @@ export function serializeAssistant(ha: IHealthAssistant | null | undefined) {
   };
 }
 
-export function serializePatient(patient: IPatient) {
+export function serializePatient(
+  patient: IPatient,
+  extras?: { linked?: boolean }
+) {
   const dob = dateOnly(patient.dob);
   const phone = patient.phoneNumber ?? '';
 
@@ -66,6 +69,13 @@ export function serializePatient(patient: IPatient) {
     address: patient.address ?? '',
     bloodType: patient.bloodType ?? undefined,
     allergies: patient.allergies ?? [],
+    medications: patient.medications ?? [],
+    conditions: patient.conditions ?? [],
+    emergencyContact: {
+      name: patient.emergencyContact?.name ?? '',
+      relationship: patient.emergencyContact?.relationship ?? '',
+      phone: patient.emergencyContact?.phone ?? '',
+    },
     chiefComplaint: patient.chiefComplaint ?? undefined,
     invitedByDoctorId: patient.invitedByDoctorId
       ? patient.invitedByDoctorId.toString()
@@ -90,5 +100,6 @@ export function serializePatient(patient: IPatient) {
       cardImageUrl: policy.cardImageUrl || '',
     })),
     ...(assignedAssistant ? { assignedAssistant } : {}),
+    linked: extras?.linked,
   };
 }

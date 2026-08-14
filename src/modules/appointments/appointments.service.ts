@@ -6,6 +6,9 @@ import { buildPaginatedResult, parsePagination } from "../../utils/paginate";
 import { generateAppointmentCode } from "../../utils/ids";
 import { serializeAppointment } from "../../serializers/appointment.serializer";
 import type { UserRole } from "../../utils/tokens";
+import type { AuthUser } from "../../middleware/auth";
+import { requirePatientAccess } from "../patients/patients.service";
+import * as availabilityService from "../availability/availability.service";
 
 async function resolvePatientObjectId(
   patientId: string,
@@ -40,6 +43,18 @@ function upcomingTimeFilter(now = new Date()) {
   };
 }
 
+function scopeAppointmentsByRole(
+  filter: Record<string, unknown>,
+  auth: { id: string; role: UserRole },
+) {
+  if (auth.role === "doctor") {
+    filter.doctorId = new Types.ObjectId(auth.id);
+  }
+  if (auth.role === "healthAssistant") {
+    filter.bookedByAssistantId = new Types.ObjectId(auth.id);
+  }
+}
+
 export async function listAppointments(
   query: {
     page?: number;
@@ -54,9 +69,7 @@ export async function listAppointments(
   const { page, limit, skip } = parsePagination(query);
   const filter: Record<string, unknown> = {};
 
-  if (auth.role === "doctor") {
-    filter.doctorId = new Types.ObjectId(auth.id);
-  }
+  scopeAppointmentsByRole(filter, auth);
 
   if (query.upcoming === "true") {
     Object.assign(filter, upcomingTimeFilter());
@@ -110,9 +123,7 @@ export async function listUpcoming(
     ...upcomingTimeFilter(),
   };
 
-  if (auth.role === "doctor") {
-    filter.doctorId = new Types.ObjectId(auth.id);
-  }
+  scopeAppointmentsByRole(filter, auth);
 
   const [docs, totalDocs] = await Promise.all([
     Appointment.find(filter)
@@ -212,6 +223,9 @@ export async function createAppointment(
     }
     patientObjectId = self._id as Types.ObjectId;
   } else {
+    if (auth.role === "healthAssistant") {
+      await requirePatientAccess(input.patientId, auth as AuthUser);
+    }
     patientObjectId = await resolvePatientObjectId(input.patientId);
   }
 
@@ -250,6 +264,7 @@ export async function createAppointment(
     if (endTime <= startTime) {
       throw new AppError("endTime must be after startTime", 400);
     }
+    await availabilityService.assertBookableSlot(doctorId, startTime, endTime);
     status = "CONFIRMED";
   }
 
@@ -262,6 +277,8 @@ export async function createAppointment(
   const apt = await Appointment.create({
     patientId: patientObjectId,
     doctorId: new Types.ObjectId(doctorId),
+    bookedByAssistantId:
+      auth.role === "healthAssistant" ? new Types.ObjectId(auth.id) : null,
     startTime,
     endTime,
     isImmediate: input.isImmediate,
@@ -302,6 +319,13 @@ export async function rescheduleAppointment(
   if (endTime <= startTime) {
     throw new AppError("endTime must be after startTime", 400);
   }
+
+  await availabilityService.assertBookableSlot(
+    apt.doctorId.toString(),
+    startTime,
+    endTime,
+    { excludeAppointmentId: apt._id.toString() },
+  );
 
   apt.startTime = startTime;
   apt.endTime = endTime;

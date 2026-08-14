@@ -1,6 +1,16 @@
-import { Patient, Doctor } from '../../models';
+import { Patient, Doctor, type IPatient } from '../../models';
 import { AppError } from '../../utils/errors';
-import { hashToken } from '../../utils/passwords';
+import {
+  hashToken,
+  hashPassword,
+  verifyPassword,
+  generateOtp,
+} from '../../utils/passwords';
+import { logger } from '../../utils/logger';
+import {
+  sendVerificationOtpEmail,
+  sendPasswordResetOtpEmail,
+} from '../mail/resend';
 import {
   issueTokenPair,
   rotateRefreshToken,
@@ -8,20 +18,7 @@ import {
   revokeRefreshToken,
 } from './token-service';
 
-function toPatientUser(patient: {
-  _id: { toString(): string };
-  email: string | null;
-  fullName: string | null;
-  dob: Date | null;
-  gender: string | null;
-  phoneNumber: string | null;
-  address: string | null;
-  bloodType: string | null;
-  patientId: string;
-  isRegistrationComplete: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
+function toPatientUser(patient: IPatient) {
   return {
     id: patient._id.toString(),
     patientId: patient.patientId,
@@ -32,6 +29,15 @@ function toPatientUser(patient: {
     phoneNumber: patient.phoneNumber ?? '',
     address: patient.address ?? '',
     bloodType: patient.bloodType ?? 'O+',
+    allergies: patient.allergies ?? [],
+    medications: patient.medications ?? [],
+    conditions: patient.conditions ?? [],
+    emergencyContact: {
+      name: patient.emergencyContact?.name ?? '',
+      relationship: patient.emergencyContact?.relationship ?? '',
+      phone: patient.emergencyContact?.phone ?? '',
+    },
+    emailVerified: Boolean(patient.emailVerified),
     isRegistrationComplete: Boolean(patient.isRegistrationComplete),
     createdAt: patient.createdAt.toISOString(),
     updatedAt: patient.updatedAt.toISOString(),
@@ -51,6 +57,50 @@ async function findPatientByInviteToken(token: string) {
     throw new AppError('Invitation has expired', 400);
   }
   return patient;
+}
+
+async function findPatientByIdentifier(identifier: string) {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('@')) {
+    return Patient.findOne({
+      email: trimmed.toLowerCase(),
+      isActive: true,
+    });
+  }
+  return Patient.findOne({ patientId: trimmed, isActive: true });
+}
+
+async function storeEmailOtp(patient: IPatient) {
+  const otp = generateOtp(6);
+  patient.verifyEmailOtpHash = hashToken(otp);
+  patient.verifyOtpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await patient.save();
+  logger.info(
+    `[dev] Patient ${patient.patientId} email OTP: ${otp}`
+  );
+  return otp;
+}
+
+function assertValidOtp(patient: IPatient, otp: string) {
+  if (
+    !patient.verifyOtpExpiresAt ||
+    patient.verifyOtpExpiresAt < new Date() ||
+    !patient.verifyEmailOtpHash ||
+    patient.verifyEmailOtpHash !== hashToken(otp)
+  ) {
+    throw new AppError('Invalid or expired code', 400);
+  }
+}
+
+function clearEmailOtp(patient: IPatient) {
+  patient.verifyEmailOtpHash = undefined;
+  patient.verifyOtpExpiresAt = undefined;
+}
+
+async function issuePatientSession(patient: IPatient) {
+  const tokens = await issueTokenPair(patient._id.toString(), 'patient');
+  return { ...tokens, user: toPatientUser(patient) };
 }
 
 export async function verifyInvitation(token: string) {
@@ -94,6 +144,7 @@ export async function completeRegistration(input: {
   address: string;
   bloodType: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
   email?: string;
+  password: string;
 }) {
   const patient = await findPatientByInviteToken(input.token);
 
@@ -124,8 +175,9 @@ export async function completeRegistration(input: {
   patient.phoneNumber = input.phoneNumber;
   patient.address = input.address;
   patient.bloodType = input.bloodType;
+  patient.passwordHash = await hashPassword(input.password);
+  patient.emailVerified = Boolean(patient.email);
   patient.isRegistrationComplete = true;
-  // Keep invitation token until agreements/consent are submitted
   await patient.save();
 
   const tokens = await issueTokenPair(patient._id.toString(), 'patient');
@@ -198,14 +250,85 @@ export async function saveAuthenticatedAgreements(
   };
 }
 
-export async function loginPatient(patientId: string) {
-  const patient = await Patient.findOne({ patientId: patientId.trim() });
-  if (!patient || !patient.isActive) {
-    throw new AppError('Invalid patient ID', 401);
+export async function loginPatient(identifier: string, password: string) {
+  const patient = await findPatientByIdentifier(identifier);
+  if (
+    !patient ||
+    !patient.passwordHash ||
+    !(await verifyPassword(password, patient.passwordHash))
+  ) {
+    throw new AppError('Invalid credentials', 401);
   }
 
-  const tokens = await issueTokenPair(patient._id.toString(), 'patient');
-  return { ...tokens, user: toPatientUser(patient) };
+  if (!patient.emailVerified) {
+    if (!patient.email) {
+      throw new AppError('Add an email to your record before signing in', 400);
+    }
+    const otp = await storeEmailOtp(patient);
+    try {
+      await sendVerificationOtpEmail({ to: patient.email, otp });
+    } catch (err) {
+      logger.error(
+        `[mail] Login verification email failed for ${patient.email}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+    return {
+      requiresEmailVerification: true as const,
+      patientId: patient.patientId,
+    };
+  }
+
+  return issuePatientSession(patient);
+}
+
+export async function verifyLoginEmail(patientId: string, otp: string) {
+  const patient = await Patient.findOne({
+    patientId: patientId.trim(),
+    isActive: true,
+  });
+  if (!patient) {
+    throw new AppError('Invalid or expired code', 400);
+  }
+  assertValidOtp(patient, otp);
+  patient.emailVerified = true;
+  clearEmailOtp(patient);
+  await patient.save();
+  return issuePatientSession(patient);
+}
+
+export async function forgotPatientPassword(identifier: string) {
+  const patient = await findPatientByIdentifier(identifier);
+  if (patient?.email) {
+    const otp = await storeEmailOtp(patient);
+    try {
+      await sendPasswordResetOtpEmail({ to: patient.email, otp });
+    } catch (err) {
+      logger.error(
+        `[mail] Password reset email failed for ${patient.email}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+  return { message: 'If that account exists, an OTP has been sent' };
+}
+
+export async function resetPatientPassword(
+  identifier: string,
+  otp: string,
+  password: string
+) {
+  const patient = await findPatientByIdentifier(identifier);
+  if (!patient) {
+    throw new AppError('Invalid or expired code', 400);
+  }
+  assertValidOtp(patient, otp);
+  patient.passwordHash = await hashPassword(password);
+  clearEmailOtp(patient);
+  await patient.save();
+  return { message: 'Password updated' };
 }
 
 export async function refreshPatient(refreshToken: string) {

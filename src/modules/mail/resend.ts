@@ -73,6 +73,25 @@ export async function sendInviteEmail(input: {
   return sendEmail({ to: input.to, subject, html, text });
 }
 
+export async function sendDoctorAccessRequestEmail(input: {
+  to: string;
+  patientName: string;
+  doctorName: string;
+  assistantName: string;
+  approveLink: string;
+}) {
+  const subject = `${input.doctorName} has been assigned to your Carelio care`;
+  const text = `${input.assistantName} asked to add ${input.doctorName} to your Carelio record. Approve or decline here: ${input.approveLink}`;
+  const html = `
+    <p>Hello ${input.patientName},</p>
+    <p><strong>${input.assistantName}</strong> asked to add <strong>${input.doctorName}</strong> so they can view your health records.</p>
+    <p>This does not cancel or confirm any booked appointment. It only grants ongoing record access.</p>
+    <p><a href="${input.approveLink}">Approve or decline this request</a></p>
+    <p>Or copy this link:<br/><code>${input.approveLink}</code></p>
+  `;
+  return sendEmail({ to: input.to, subject, html, text });
+}
+
 export async function sendVerificationOtpEmail(input: {
   to: string;
   otp: string;

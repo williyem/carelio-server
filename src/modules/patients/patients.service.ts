@@ -18,6 +18,8 @@ import {
   sendVerificationOtpEmail,
 } from '../mail/resend';
 import type { UserRole } from '../../utils/tokens';
+import type { AuthUser } from '../../middleware/auth';
+import * as accessService from '../access/access.service';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -44,11 +46,14 @@ async function findPatientByIdOrCode(id: string) {
   return Patient.findOne({ patientId: id }).populate('assignedAssistantId');
 }
 
-export async function listPatients(query: {
-  search?: string;
-  page?: number;
-  limit?: number;
-}) {
+export async function listPatients(
+  query: {
+    search?: string;
+    page?: number;
+    limit?: number;
+  },
+  auth?: AuthUser
+) {
   const { page, limit, skip } = parsePagination(query);
   const filter = { isActive: true, ...searchFilter(query.search) };
   const [docs, totalDocs] = await Promise.all([
@@ -59,8 +64,16 @@ export async function listPatients(query: {
       .limit(limit),
     Patient.countDocuments(filter),
   ]);
+  const linked = auth
+    ? await accessService.linkedPatientIdSet(
+        auth,
+        docs.map((d) => d._id as Types.ObjectId)
+      )
+    : new Set<string>();
   return buildPaginatedResult(
-    docs.map((d) => serializePatient(d)),
+    docs.map((d) =>
+      serializePatient(d, { linked: linked.has(d._id.toString()) })
+    ),
     totalDocs,
     page,
     limit
@@ -100,7 +113,7 @@ export async function listAssignedPatients(query: {
   ]);
 
   return buildPaginatedResult(
-    docs.map((d) => serializePatient(d)),
+    docs.map((d) => serializePatient(d, { linked: true })),
     totalDocs,
     page,
     limit
@@ -134,10 +147,21 @@ export async function listUnassignedPatients(query: {
   );
 }
 
-export async function getPatient(id: string) {
+export async function requirePatientAccess(id: string, auth: AuthUser) {
   const patient = await findPatientByIdOrCode(id);
   if (!patient) throw new AppError('Patient not found', 404);
-  return serializePatient(patient);
+  if (auth.role === 'doctor' || auth.role === 'healthAssistant') {
+    await accessService.assertStaffLinkedToPatient(auth, patient);
+  }
+  return patient;
+}
+
+export async function getPatient(id: string, auth?: AuthUser) {
+  const patient = auth
+    ? await requirePatientAccess(id, auth)
+    : await findPatientByIdOrCode(id);
+  if (!patient) throw new AppError('Patient not found', 404);
+  return serializePatient(patient, { linked: true });
 }
 
 export async function registerPatient(
@@ -212,6 +236,25 @@ export async function updatePatient(
     patient.bloodType = input.bloodType as typeof patient.bloodType;
   }
   if (Array.isArray(input.allergies)) patient.allergies = input.allergies as string[];
+  if (Array.isArray(input.medications)) {
+    patient.medications = input.medications as string[];
+  }
+  if (Array.isArray(input.conditions)) {
+    patient.conditions = input.conditions as string[];
+  }
+  if (input.emergencyContact && typeof input.emergencyContact === 'object') {
+    const contact = input.emergencyContact as {
+      name?: string;
+      relationship?: string;
+      phone?: string;
+    };
+    patient.emergencyContact = {
+      name: contact.name ?? patient.emergencyContact?.name ?? '',
+      relationship:
+        contact.relationship ?? patient.emergencyContact?.relationship ?? '',
+      phone: contact.phone ?? patient.emergencyContact?.phone ?? '',
+    };
+  }
   if (input.chiefComplaint !== undefined) {
     patient.chiefComplaint =
       input.chiefComplaint === null ? null : String(input.chiefComplaint);
@@ -248,8 +291,10 @@ export async function assignPatient(patientId: string, assistantId: string) {
     throw new AppError('Health assistant not found', 404);
   }
 
-  patient.assignedAssistantId = assistant._id as Types.ObjectId;
-  await patient.save();
+  if (!patient.assignedAssistantId) {
+    patient.assignedAssistantId = assistant._id as Types.ObjectId;
+    await patient.save();
+  }
 
   const populated = await Patient.findById(patient._id).populate(
     'assignedAssistantId'
@@ -361,7 +406,8 @@ export async function startVerify(id: string, type: 'email') {
 export async function confirmVerify(
   id: string,
   code: string,
-  type: 'email'
+  type: 'email',
+  auth?: AuthUser
 ) {
   const patient = await findPatientByIdOrCode(id);
   if (!patient) throw new AppError('Patient not found', 404);
@@ -383,12 +429,23 @@ export async function confirmVerify(
   patient.emailVerified = true;
   patient.verifyEmailOtpHash = undefined;
   patient.verifyOtpExpiresAt = undefined;
+  if (auth?.role === 'doctor' && !patient.invitedByDoctorId) {
+    patient.invitedByDoctorId = new Types.ObjectId(auth.id);
+  }
+  if (auth?.role === 'healthAssistant' && !patient.assignedAssistantId) {
+    patient.assignedAssistantId = new Types.ObjectId(auth.id);
+  }
   await patient.save();
+
+  if (auth) {
+    await accessService.grantOtpAccess(patient._id.toString(), auth);
+  }
 
   return {
     id: patient._id.toString(),
     patientId: patient.patientId,
     phoneVerified: patient.phoneVerified,
     emailVerified: patient.emailVerified,
+    linked: true,
   };
 }

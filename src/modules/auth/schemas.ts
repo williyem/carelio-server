@@ -57,7 +57,23 @@ export const regenerateRecoverySchema = z.object({
 });
 
 export const patientLoginSchema = z.object({
+  identifier: z.string().min(1),
+  password: z.string().min(1),
+});
+
+export const patientVerifyLoginEmailSchema = z.object({
   patientId: z.string().min(1),
+  otp: z.string().min(4),
+});
+
+export const patientForgotPasswordSchema = z.object({
+  identifier: z.string().min(1),
+});
+
+export const patientResetPasswordSchema = z.object({
+  identifier: z.string().min(1),
+  otp: z.string().min(4),
+  password: z.string().min(8),
 });
 
 export const completeRegistrationSchema = z.object({
@@ -69,6 +85,7 @@ export const completeRegistrationSchema = z.object({
   address: z.string().min(1),
   bloodType: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']),
   email: z.string().email().optional(),
+  password: z.string().min(8),
 });
 
 export const consentAgreementsSchema = z.object({

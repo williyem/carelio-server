@@ -34,6 +34,7 @@ export interface IMeasurementRequest {
 export interface IAppointment extends Document {
   patientId: Types.ObjectId;
   doctorId: Types.ObjectId;
+  bookedByAssistantId?: Types.ObjectId | null;
   startTime?: Date;
   endTime?: Date;
   isImmediate: boolean;
@@ -62,6 +63,12 @@ const appointmentSchema = new Schema<IAppointment>(
       type: Schema.Types.ObjectId,
       ref: 'Doctor',
       required: true,
+      index: true,
+    },
+    bookedByAssistantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'HealthAssistant',
+      default: null,
       index: true,
     },
     startTime: { type: Date },
@@ -131,5 +138,6 @@ const appointmentSchema = new Schema<IAppointment>(
 
 appointmentSchema.index({ startTime: 1 });
 appointmentSchema.index({ doctorId: 1, startTime: 1 });
+appointmentSchema.index({ bookedByAssistantId: 1, startTime: 1 });
 
 export const Appointment = model<IAppointment>('Appointment', appointmentSchema);

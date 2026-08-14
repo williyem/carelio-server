@@ -52,6 +52,16 @@ const mePatchSchema = z.object({
   bloodType: z
     .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
     .optional(),
+  allergies: z.array(z.string()).optional(),
+  medications: z.array(z.string()).optional(),
+  conditions: z.array(z.string()).optional(),
+  emergencyContact: z
+    .object({
+      name: z.string().optional(),
+      relationship: z.string().optional(),
+      phone: z.string().optional(),
+    })
+    .optional(),
   isRegistrationComplete: z.boolean().optional(),
 });
 
@@ -72,7 +82,7 @@ router.get(
   staffAuth,
   asyncHandler(async (req, res) => {
     const query = searchQuerySchema.parse(req.query);
-    const result = await patientsService.listPatients(query);
+    const result = await patientsService.listPatients(query, req.auth);
     res.json(result);
   })
 );
@@ -280,9 +290,59 @@ router.get(
 );
 
 router.get(
+  '/doctor-requests/:token',
+  asyncHandler(async (req, res) => {
+    const result = await accessService.getDoctorAccessRequest(
+      param(req.params.token)
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/doctor-requests/:token/approve',
+  asyncHandler(async (req, res) => {
+    const result = await accessService.resolveDoctorAccessRequest(
+      param(req.params.token),
+      'approved'
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/doctor-requests/:token/decline',
+  asyncHandler(async (req, res) => {
+    const result = await accessService.resolveDoctorAccessRequest(
+      param(req.params.token),
+      'declined'
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/doctor-requests',
+  requireAuth('healthAssistant'),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ doctorId: z.string().min(1) }).parse(req.body);
+    const result = await accessService.createDoctorAccessRequest(
+      param(req.params.id),
+      body.doctorId,
+      req.auth!.id
+    );
+    res.status(201).json(result);
+  })
+);
+
+router.get(
   '/:patientId/notes',
   notesAuth,
   asyncHandler(async (req, res) => {
+    await patientsService.requirePatientAccess(
+      param(req.params.patientId),
+      req.auth!
+    );
     const query = searchQuerySchema.parse(req.query);
     const result = await notesService.listPatientNotes(
       param(req.params.patientId),
@@ -299,7 +359,10 @@ router.get(
   '/:id',
   staffAuth,
   asyncHandler(async (req, res) => {
-    const result = await patientsService.getPatient(param(req.params.id));
+    const result = await patientsService.getPatient(
+      param(req.params.id),
+      req.auth
+    );
     res.json(result);
   })
 );
@@ -354,7 +417,8 @@ router.post(
     const result = await patientsService.confirmVerify(
       param(req.params.id),
       body.code,
-      body.type
+      body.type,
+      req.auth
     );
     res.json(result);
   })

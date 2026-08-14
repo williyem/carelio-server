@@ -23,4 +23,9 @@ export {
   type IConsultationNote,
 } from './ConsultationNote';
 export { AccessGrant, type IAccessGrant } from './AccessGrant';
+export {
+  DoctorAccessRequest,
+  type IDoctorAccessRequest,
+  type DoctorAccessRequestStatus,
+} from './DoctorAccessRequest';
 export { BillingProfile, type IBillingProfile } from './BillingProfile';

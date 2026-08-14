@@ -83,7 +83,12 @@ export function serializeAppointment(appointment: IAppointment) {
     patientId: isPatient(patientRef)
       ? patientRef._id.toString()
       : patientRef.toString(),
-    doctorId: isDoctor(doctorRef) ? doctorRef._id.toString() : doctorRef.toString(),
+    doctorId: isDoctor(doctorRef)
+      ? doctorRef._id.toString()
+      : doctorRef.toString(),
+    bookedByAssistantId: appointment.bookedByAssistantId
+      ? appointment.bookedByAssistantId.toString()
+      : null,
     date: startTime ? startTime.slice(0, 10) : undefined,
     startTime,
     endTime: iso(appointment.endTime),

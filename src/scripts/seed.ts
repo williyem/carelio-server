@@ -57,11 +57,19 @@ async function seed() {
       address: 'Accra, Ghana',
       bloodType: 'O+' as const,
       allergies: ['Penicillin'],
+      medications: ['Sumatriptan'],
+      conditions: ['Migraine'],
+      emergencyContact: {
+        name: 'Kwame Mensah',
+        relationship: 'Spouse',
+        phone: '+233200000010',
+      },
       chiefComplaint: 'Recurring headaches',
       assignedAssistantId: ha._id,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: true,
+      passwordHash,
     },
     {
       patientId: 'PAT-1002',
@@ -73,11 +81,19 @@ async function seed() {
       address: '12 Independence Ave, Accra',
       bloodType: 'A+' as const,
       allergies: [],
+      medications: [],
+      conditions: ['Fatigue'],
+      emergencyContact: {
+        name: 'Jane Doe',
+        relationship: 'Sister',
+        phone: '+233201111111',
+      },
       chiefComplaint: 'Fatigue',
       assignedAssistantId: ha._id,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: true,
+      passwordHash,
     },
     {
       patientId: 'PAT-1003',
@@ -89,11 +105,19 @@ async function seed() {
       address: '45 Ring Road, Kumasi',
       bloodType: 'B+' as const,
       allergies: ['Latex'],
+      medications: [],
+      conditions: ['Anxiety'],
+      emergencyContact: {
+        name: 'Michael Johnson',
+        relationship: 'Father',
+        phone: '+233209999999',
+      },
       chiefComplaint: 'Anxiety',
       assignedAssistantId: null,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: false,
+      passwordHash,
     },
     {
       patientId: 'PAT-1004',
@@ -188,6 +212,7 @@ async function seed() {
   console.log(`  Doctor: ${doctor.email} / ${password}`);
   console.log(`  Health Assistant: ${ha.email} / ${password} (${ha.staffCode})`);
   console.log(`  Patients: ${patients.map((p) => p.patientId).join(', ')}`);
+  console.log(`  Patient portal password: ${password}`);
   process.exit(0);
 }
 

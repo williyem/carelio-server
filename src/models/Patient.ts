@@ -14,6 +14,7 @@ export type BloodType =
 export interface IPatient extends Document {
   patientId: string;
   email: string | null;
+  passwordHash?: string;
   phoneNumber: string | null;
   fullName: string | null;
   dob: Date | null;
@@ -21,6 +22,13 @@ export interface IPatient extends Document {
   address: string | null;
   bloodType: BloodType | null;
   allergies: string[];
+  medications: string[];
+  conditions: string[];
+  emergencyContact: {
+    name: string;
+    relationship: string;
+    phone: string;
+  };
   chiefComplaint: string | null;
   invitedByDoctorId: Types.ObjectId | null;
   assignedAssistantId: Types.ObjectId | null;
@@ -60,6 +68,7 @@ const patientSchema = new Schema<IPatient>(
   {
     patientId: { type: String, required: true, unique: true, trim: true },
     email: { type: String, default: null, lowercase: true, trim: true },
+    passwordHash: { type: String, default: undefined },
     phoneNumber: { type: String, default: null, trim: true },
     fullName: { type: String, default: null, trim: true },
     dob: { type: Date, default: null },
@@ -75,6 +84,13 @@ const patientSchema = new Schema<IPatient>(
       default: undefined,
     },
     allergies: { type: [String], default: [] },
+    medications: { type: [String], default: [] },
+    conditions: { type: [String], default: [] },
+    emergencyContact: {
+      name: { type: String, default: '' },
+      relationship: { type: String, default: '' },
+      phone: { type: String, default: '' },
+    },
     chiefComplaint: { type: String, default: null },
     invitedByDoctorId: {
       type: Schema.Types.ObjectId,
