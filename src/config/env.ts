@@ -24,6 +24,9 @@ const envSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().optional().default(''),
   CLOUDINARY_API_KEY: z.string().optional().default(''),
   CLOUDINARY_API_SECRET: z.string().optional().default(''),
+  OPEN_ROUTER_API_KEY: z.string().optional().default(''),
+  OPEN_ROUTER_MODEL: z.string().optional().default('openrouter/free'),
+  CRON_SECRET: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

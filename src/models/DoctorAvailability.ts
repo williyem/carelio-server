@@ -24,7 +24,7 @@ const doctorAvailabilitySchema = new Schema<IDoctorAvailability>(
       unique: true,
       index: true,
     },
-    timezone: { type: String, default: 'America/New_York' },
+    timezone: { type: String, default: 'GMT' },
     enabled: { type: Boolean, default: true },
     days: { type: Schema.Types.Mixed, default: defaultAvailabilityDays },
   },

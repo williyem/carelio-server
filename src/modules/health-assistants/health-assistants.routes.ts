@@ -11,7 +11,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     const assistants = await HealthAssistant.find({ isActive: true })
       .sort({ firstName: 1, lastName: 1 })
-      .select('firstName lastName email');
+      .select('firstName lastName email avatarUrl');
 
     res.json(
       assistants.map((a) => ({
@@ -19,6 +19,7 @@ router.get(
         firstName: a.firstName,
         lastName: a.lastName,
         email: a.email,
+        avatarUrl: a.avatarUrl || '',
       }))
     );
   })

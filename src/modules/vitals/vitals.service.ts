@@ -74,6 +74,10 @@ export async function createVital(
     throw new AppError('Patient does not match appointment', 400);
   }
 
+  if (auth.role === 'patient' && appointment.patientId.toString() !== auth.id) {
+    throw new AppError('Forbidden', 403);
+  }
+
   const recordedAt = new Date(input.recordedAt);
   if (Number.isNaN(recordedAt.getTime())) {
     throw new AppError('Invalid recordedAt', 400);
@@ -88,7 +92,14 @@ export async function createVital(
     reading: input.reading,
     deviceId: input.deviceId ?? null,
     recordedAt,
-    status: 'pending',
+    status:
+      auth.role === 'doctor' && input.reading?.source !== 'manual'
+        ? 'pending'
+        : 'confirmed',
+    confirmedAt:
+      auth.role === 'doctor' && input.reading?.source !== 'manual'
+        ? null
+        : new Date(),
   });
 
   return serializeVital(vital);
@@ -132,6 +143,35 @@ export async function listByAppointment(appointmentId: string) {
         ? assistantMap.get(d.recordedByAssistantId.toString()) ?? null
         : null
     )
+  );
+}
+
+export async function rejectVitals(
+  appointmentId: string,
+  vitalIds: string[]
+) {
+  const appointment = await Appointment.findById(appointmentId);
+  if (!appointment) throw new AppError('Appointment not found', 404);
+
+  if (!vitalIds.length) {
+    throw new AppError('vitalIds is required', 400);
+  }
+
+  const objectIds = vitalIds
+    .filter((id) => Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+
+  await Vital.updateMany(
+    {
+      _id: { $in: objectIds },
+      appointmentId: appointment._id,
+    },
+    {
+      $set: {
+        status: 'discarded',
+        confirmedAt: null,
+      },
+    }
   );
 }
 

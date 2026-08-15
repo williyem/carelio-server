@@ -11,6 +11,11 @@ export interface IConsultationNote extends Document {
   assessment: string;
   plan: string;
   status: NoteStatus;
+  planSharedAt?: Date | null;
+  planSharedWithPatientAt?: Date | null;
+  planSharedWithHealthAssistantAt?: Date | null;
+  sharedSoapFieldsPatient?: string[];
+  sharedSoapFieldsHealthAssistant?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +45,11 @@ const consultationNoteSchema = new Schema<IConsultationNote>(
     assessment: { type: String, default: '' },
     plan: { type: String, default: '' },
     status: { type: String, enum: ['DRAFT', 'FINAL'], default: 'DRAFT' },
+    planSharedAt: { type: Date, default: null },
+    planSharedWithPatientAt: { type: Date, default: null },
+    planSharedWithHealthAssistantAt: { type: Date, default: null },
+    sharedSoapFieldsPatient: { type: [String], default: [] },
+    sharedSoapFieldsHealthAssistant: { type: [String], default: [] },
   },
   { timestamps: true }
 );

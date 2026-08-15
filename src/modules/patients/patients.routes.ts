@@ -6,12 +6,11 @@ import {
   searchQuerySchema,
   registerPatientSchema,
   updatePatientSchema,
-  assignPatientSchema,
   verifyCodeSchema,
 } from './schemas';
 import { consentAgreementsSchema } from '../auth/schemas';
 import * as patientsService from './patients.service';
-import { saveAgreements } from '../auth/patient-auth.service';
+import { saveAgreements, saveAuthenticatedAgreements } from '../auth/patient-auth.service';
 import patientAppointmentsRouter from '../appointments/patient-appointments.routes';
 import * as notesService from '../notes/notes.service';
 import * as accessService from '../access/access.service';
@@ -47,6 +46,34 @@ const mePatchSchema = z.object({
   fullName: z.string().optional(),
   address: z.string().optional(),
   phoneNumber: z.string().optional(),
+  dob: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
+  bloodType: z
+    .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
+    .optional(),
+  allergies: z.array(z.string()).optional(),
+  medications: z.array(z.string()).optional(),
+  conditions: z.array(z.string()).optional(),
+  emergencyContact: z
+    .object({
+      name: z.string().optional(),
+      relationship: z.string().optional(),
+      phone: z.string().optional(),
+    })
+    .optional(),
+  isRegistrationComplete: z.boolean().optional(),
+});
+
+const meAgreementsSchema = z.object({
+  agreements: z
+    .array(
+      z.object({
+        type: z.string().min(1),
+        signatureUrl: z.string().min(1),
+        documentUrl: z.string().min(1),
+      })
+    )
+    .min(1),
 });
 
 router.get(
@@ -54,7 +81,7 @@ router.get(
   staffAuth,
   asyncHandler(async (req, res) => {
     const query = searchQuerySchema.parse(req.query);
-    const result = await patientsService.listPatients(query);
+    const result = await patientsService.listPatients(query, req.auth);
     res.json(result);
   })
 );
@@ -69,29 +96,6 @@ router.get(
       callerId: req.auth!.id,
       callerRole: req.auth!.role,
     });
-    res.json(result);
-  })
-);
-
-router.get(
-  '/unassigned',
-  staffAuth,
-  asyncHandler(async (req, res) => {
-    const query = searchQuerySchema.parse(req.query);
-    const result = await patientsService.listUnassignedPatients(query);
-    res.json(result);
-  })
-);
-
-router.post(
-  '/assign',
-  staffAuth,
-  asyncHandler(async (req, res) => {
-    const body = assignPatientSchema.parse(req.body);
-    const result = await patientsService.assignPatient(
-      body.patientId,
-      body.assistantId
-    );
     res.json(result);
   })
 );
@@ -133,9 +137,7 @@ router.get(
   '/me',
   patientAuth,
   asyncHandler(async (req, res) => {
-    const patient = await Patient.findById(req.auth!.id).populate(
-      'assignedAssistantId'
-    );
+    const patient = await Patient.findById(req.auth!.id);
     if (!patient) throw new AppError('Patient not found', 404);
     res.json(serializePatient(patient));
   })
@@ -149,6 +151,19 @@ router.patch(
     const result = await patientsService.updatePatient(req.auth!.id, {
       ...body,
     });
+    res.json(result);
+  })
+);
+
+router.post(
+  '/me/agreements',
+  patientAuth,
+  asyncHandler(async (req, res) => {
+    const body = meAgreementsSchema.parse(req.body);
+    const result = await saveAuthenticatedAgreements(
+      req.auth!.id,
+      body.agreements
+    );
     res.json(result);
   })
 );
@@ -249,13 +264,64 @@ router.get(
 );
 
 router.get(
+  '/doctor-requests/:token',
+  asyncHandler(async (req, res) => {
+    const result = await accessService.getDoctorAccessRequest(
+      param(req.params.token)
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/doctor-requests/:token/approve',
+  asyncHandler(async (req, res) => {
+    const result = await accessService.resolveDoctorAccessRequest(
+      param(req.params.token),
+      'approved'
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/doctor-requests/:token/decline',
+  asyncHandler(async (req, res) => {
+    const result = await accessService.resolveDoctorAccessRequest(
+      param(req.params.token),
+      'declined'
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/doctor-requests',
+  requireAuth('healthAssistant'),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ doctorId: z.string().min(1) }).parse(req.body);
+    const result = await accessService.createDoctorAccessRequest(
+      param(req.params.id),
+      body.doctorId,
+      req.auth!.id
+    );
+    res.status(201).json(result);
+  })
+);
+
+router.get(
   '/:patientId/notes',
   notesAuth,
   asyncHandler(async (req, res) => {
+    await patientsService.requirePatientAccess(
+      param(req.params.patientId),
+      req.auth!
+    );
     const query = searchQuerySchema.parse(req.query);
     const result = await notesService.listPatientNotes(
       param(req.params.patientId),
-      query
+      query,
+      req.auth?.role
     );
     res.json(result);
   })
@@ -267,7 +333,10 @@ router.get(
   '/:id',
   staffAuth,
   asyncHandler(async (req, res) => {
-    const result = await patientsService.getPatient(param(req.params.id));
+    const result = await patientsService.getPatient(
+      param(req.params.id),
+      req.auth
+    );
     res.json(result);
   })
 );
@@ -287,17 +356,6 @@ router.delete(
   staffAuth,
   asyncHandler(async (req, res) => {
     const result = await patientsService.softDeletePatient(param(req.params.id));
-    res.json(result);
-  })
-);
-
-router.delete(
-  '/:patientId/unassign',
-  staffAuth,
-  asyncHandler(async (req, res) => {
-    const result = await patientsService.unassignPatient(
-      param(req.params.patientId)
-    );
     res.json(result);
   })
 );
@@ -322,7 +380,8 @@ router.post(
     const result = await patientsService.confirmVerify(
       param(req.params.id),
       body.code,
-      body.type
+      body.type,
+      req.auth
     );
     res.json(result);
   })

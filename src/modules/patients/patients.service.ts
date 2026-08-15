@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { Patient, HealthAssistant } from '../../models';
+import { Patient, Doctor } from '../../models';
 import { AppError } from '../../utils/errors';
 import {
   buildPaginatedResult,
@@ -18,6 +18,8 @@ import {
   sendVerificationOtpEmail,
 } from '../mail/resend';
 import type { UserRole } from '../../utils/tokens';
+import type { AuthUser } from '../../middleware/auth';
+import * as accessService from '../access/access.service';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -38,35 +40,54 @@ function searchFilter(search?: string) {
 
 async function findPatientByIdOrCode(id: string) {
   if (Types.ObjectId.isValid(id)) {
-    const byId = await Patient.findById(id).populate('assignedAssistantId');
+    const byId = await Patient.findById(id);
     if (byId) return byId;
   }
-  return Patient.findOne({ patientId: id }).populate('assignedAssistantId');
+  return Patient.findOne({ patientId: id });
 }
 
-export async function listPatients(query: {
-  search?: string;
-  page?: number;
-  limit?: number;
-}) {
+export async function listPatients(
+  query: {
+    search?: string;
+    page?: number;
+    limit?: number;
+  },
+  auth?: AuthUser
+) {
   const { page, limit, skip } = parsePagination(query);
-  const filter = { isActive: true, ...searchFilter(query.search) };
+  let includeInactive = false;
+  if (auth?.role === 'doctor') {
+    const doctor = await Doctor.findById(auth.id).select('isAdmin isActive');
+    includeInactive = Boolean(doctor?.isAdmin && doctor.isActive);
+  }
+  const filter = {
+    ...(includeInactive ? {} : { isActive: true }),
+    ...searchFilter(query.search),
+  };
   const [docs, totalDocs] = await Promise.all([
     Patient.find(filter)
-      .populate('assignedAssistantId')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
     Patient.countDocuments(filter),
   ]);
+  const linked = auth
+    ? await accessService.linkedPatientIdSet(
+        auth,
+        docs.map((d) => d._id as Types.ObjectId)
+      )
+    : new Set<string>();
   return buildPaginatedResult(
-    docs.map((d) => serializePatient(d)),
+    docs.map((d) =>
+      serializePatient(d, { linked: linked.has(d._id.toString()) })
+    ),
     totalDocs,
     page,
     limit
   );
 }
 
+/** Directory view for HA/doctor assigned routes — same as listPatients (no sticky HA). */
 export async function listAssignedPatients(query: {
   search?: string;
   page?: number;
@@ -75,69 +96,33 @@ export async function listAssignedPatients(query: {
   callerId?: string;
   callerRole?: UserRole;
 }) {
-  const { page, limit, skip } = parsePagination(query);
-  let assistantId = query.assistantId;
-  if (!assistantId && query.callerRole === 'healthAssistant') {
-    assistantId = query.callerId;
-  }
-  if (!assistantId) {
-    throw new AppError('assistantId is required', 400);
-  }
-
-  const filter = {
-    isActive: true,
-    assignedAssistantId: new Types.ObjectId(assistantId),
-    ...searchFilter(query.search),
-  };
-
-  const [docs, totalDocs] = await Promise.all([
-    Patient.find(filter)
-      .populate('assignedAssistantId')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Patient.countDocuments(filter),
-  ]);
-
-  return buildPaginatedResult(
-    docs.map((d) => serializePatient(d)),
-    totalDocs,
-    page,
-    limit
+  return listPatients(
+    {
+      search: query.search,
+      page: query.page,
+      limit: query.limit,
+    },
+    query.callerId && query.callerRole
+      ? { id: query.callerId, role: query.callerRole }
+      : undefined
   );
 }
 
-export async function listUnassignedPatients(query: {
-  search?: string;
-  page?: number;
-  limit?: number;
-}) {
-  const { page, limit, skip } = parsePagination(query);
-  const filter = {
-    isActive: true,
-    assignedAssistantId: null,
-    ...searchFilter(query.search),
-  };
-  const [docs, totalDocs] = await Promise.all([
-    Patient.find(filter)
-      .populate('assignedAssistantId')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Patient.countDocuments(filter),
-  ]);
-  return buildPaginatedResult(
-    docs.map((d) => serializePatient(d)),
-    totalDocs,
-    page,
-    limit
-  );
-}
-
-export async function getPatient(id: string) {
+export async function requirePatientAccess(id: string, auth: AuthUser) {
   const patient = await findPatientByIdOrCode(id);
   if (!patient) throw new AppError('Patient not found', 404);
-  return serializePatient(patient);
+  if (auth.role === 'doctor' || auth.role === 'healthAssistant') {
+    await accessService.assertStaffLinkedToPatient(auth, patient);
+  }
+  return patient;
+}
+
+export async function getPatient(id: string, auth?: AuthUser) {
+  const patient = auth
+    ? await requirePatientAccess(id, auth)
+    : await findPatientByIdOrCode(id);
+  if (!patient) throw new AppError('Patient not found', 404);
+  return serializePatient(patient, { linked: true });
 }
 
 export async function registerPatient(
@@ -179,18 +164,13 @@ export async function registerPatient(
     chiefComplaint: input.chiefComplaint ?? null,
     invitedByDoctorId:
       auth.role === 'doctor' ? new Types.ObjectId(auth.id) : null,
-    assignedAssistantId:
-      auth.role === 'healthAssistant' ? new Types.ObjectId(auth.id) : null,
     isRegistrationComplete: true,
     isActive: true,
     phoneVerified: false,
     emailVerified: false,
   });
 
-  const populated = await Patient.findById(patient._id).populate(
-    'assignedAssistantId'
-  );
-  return serializePatient(populated!);
+  return serializePatient(patient);
 }
 
 export async function updatePatient(
@@ -212,6 +192,25 @@ export async function updatePatient(
     patient.bloodType = input.bloodType as typeof patient.bloodType;
   }
   if (Array.isArray(input.allergies)) patient.allergies = input.allergies as string[];
+  if (Array.isArray(input.medications)) {
+    patient.medications = input.medications as string[];
+  }
+  if (Array.isArray(input.conditions)) {
+    patient.conditions = input.conditions as string[];
+  }
+  if (input.emergencyContact && typeof input.emergencyContact === 'object') {
+    const contact = input.emergencyContact as {
+      name?: string;
+      relationship?: string;
+      phone?: string;
+    };
+    patient.emergencyContact = {
+      name: contact.name ?? patient.emergencyContact?.name ?? '',
+      relationship:
+        contact.relationship ?? patient.emergencyContact?.relationship ?? '',
+      phone: contact.phone ?? patient.emergencyContact?.phone ?? '',
+    };
+  }
   if (input.chiefComplaint !== undefined) {
     patient.chiefComplaint =
       input.chiefComplaint === null ? null : String(input.chiefComplaint);
@@ -225,10 +224,7 @@ export async function updatePatient(
   }
 
   await patient.save();
-  const populated = await Patient.findById(patient._id).populate(
-    'assignedAssistantId'
-  );
-  return serializePatient(populated!);
+  return serializePatient(patient);
 }
 
 export async function softDeletePatient(id: string) {
@@ -237,32 +233,6 @@ export async function softDeletePatient(id: string) {
   patient.isActive = false;
   await patient.save();
   return { message: 'Patient deactivated' };
-}
-
-export async function assignPatient(patientId: string, assistantId: string) {
-  const patient = await findPatientByIdOrCode(patientId);
-  if (!patient) throw new AppError('Patient not found', 404);
-
-  const assistant = await HealthAssistant.findById(assistantId);
-  if (!assistant || !assistant.isActive) {
-    throw new AppError('Health assistant not found', 404);
-  }
-
-  patient.assignedAssistantId = assistant._id as Types.ObjectId;
-  await patient.save();
-
-  const populated = await Patient.findById(patient._id).populate(
-    'assignedAssistantId'
-  );
-  return serializePatient(populated!);
-}
-
-export async function unassignPatient(patientId: string) {
-  const patient = await findPatientByIdOrCode(patientId);
-  if (!patient) throw new AppError('Patient not found', 404);
-  patient.assignedAssistantId = null;
-  await patient.save();
-  return { message: 'Patient unassigned' };
 }
 
 export async function invitePatient(
@@ -288,8 +258,6 @@ export async function invitePatient(
     fullName: null,
     invitedByDoctorId:
       auth.role === 'doctor' ? new Types.ObjectId(auth.id) : null,
-    assignedAssistantId:
-      auth.role === 'healthAssistant' ? new Types.ObjectId(auth.id) : null,
     isRegistrationComplete: false,
     isActive: true,
     phoneVerified: false,
@@ -361,7 +329,8 @@ export async function startVerify(id: string, type: 'email') {
 export async function confirmVerify(
   id: string,
   code: string,
-  type: 'email'
+  type: 'email',
+  auth?: AuthUser
 ) {
   const patient = await findPatientByIdOrCode(id);
   if (!patient) throw new AppError('Patient not found', 404);
@@ -383,12 +352,20 @@ export async function confirmVerify(
   patient.emailVerified = true;
   patient.verifyEmailOtpHash = undefined;
   patient.verifyOtpExpiresAt = undefined;
+  if (auth?.role === 'doctor' && !patient.invitedByDoctorId) {
+    patient.invitedByDoctorId = new Types.ObjectId(auth.id);
+  }
   await patient.save();
+
+  if (auth) {
+    await accessService.grantOtpAccess(patient._id.toString(), auth);
+  }
 
   return {
     id: patient._id.toString(),
     patientId: patient.patientId,
     phoneVerified: patient.phoneVerified,
     emailVerified: patient.emailVerified,
+    linked: true,
   };
 }

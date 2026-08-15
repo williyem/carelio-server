@@ -17,6 +17,8 @@ import doctorsRouter from './modules/doctors/doctors.routes';
 import statsRouter from './modules/stats/stats.routes';
 import vitalsRouter from './modules/vitals/vitals.routes';
 import uploadRouter from './modules/upload/upload.routes';
+import adminRouter from './modules/admin/admin.routes';
+import deviceGuidesRouter from './modules/device-guides/device-guides.routes';
 import devRouter from './modules/dev/dev.routes';
 import { errorHandler } from './middleware/error-handler';
 import { requestLogger } from './middleware/request-logger';
@@ -64,6 +66,8 @@ export function createApp() {
   app.use('/stats', statsRouter);
   app.use('/vitals', vitalsRouter);
   app.use('/upload', uploadRouter);
+  app.use('/admin', adminRouter);
+  app.use('/device-guides', deviceGuidesRouter);
 
   app.use(errorHandler);
 

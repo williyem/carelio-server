@@ -25,7 +25,7 @@ import { sendPasswordResetOtpEmail } from '../mail/resend';
 
 export interface StaffDoc extends Document {
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
   firstName: string;
   lastName: string;
   phoneNumber: string;
@@ -35,9 +35,13 @@ export interface StaffDoc extends Document {
   pendingTotpSecret?: string;
   recoveryCodes: string[];
   isActive: boolean;
+  isAdmin?: boolean;
   resetOtpHash?: string;
   resetOtpExpiresAt?: Date;
   mustResetPassword?: boolean;
+  emailVerified?: boolean;
+  invitationTokenHash?: string;
+  invitationExpiresAt?: Date;
   avatarUrl?: string;
   title?: string;
   specialty?: string;
@@ -66,6 +70,7 @@ export function toStaffUser(user: StaffDoc) {
     twoFactorEnabled: user.twoFactorEnabled,
     twoFactorMethod: user.twoFactorMethod,
     isActive: user.isActive,
+    isAdmin: Boolean(user.isAdmin),
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
     ...serializeStaffProfile(user),
@@ -109,11 +114,23 @@ export function createStaffAuthService(opts: {
     const user = (await model.findOne({
       email: email.toLowerCase(),
     })) as StaffDoc | null;
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    if (!user?.passwordHash) {
+      throw new AppError(
+        'Complete your invite onboarding before signing in',
+        403
+      );
+    }
+    if (!(await verifyPassword(password, user.passwordHash))) {
       throw new AppError('Invalid email or password', 401);
     }
     if (!user.isActive) {
       throw new AppError('Account is inactive', 403);
+    }
+    if (user.invitationTokenHash) {
+      throw new AppError(
+        'Complete your invite onboarding before signing in',
+        403
+      );
     }
 
     if (user.mustResetPassword) {
@@ -272,7 +289,7 @@ export function createStaffAuthService(opts: {
     if (!user) {
       throw new AppError('Unauthorized', 401);
     }
-    if (!(await verifyPassword(oldPassword, user.passwordHash))) {
+    if (!user.passwordHash || !(await verifyPassword(oldPassword, user.passwordHash))) {
       throw new AppError('Current password is incorrect', 400);
     }
     user.passwordHash = await hashPassword(newPassword);
@@ -342,7 +359,7 @@ export function createStaffAuthService(opts: {
     if (!user) {
       throw new AppError('Unauthorized', 401);
     }
-    if (!(await verifyPassword(password, user.passwordHash))) {
+    if (!user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
       throw new AppError('Password is incorrect', 400);
     }
 
@@ -361,7 +378,7 @@ export function createStaffAuthService(opts: {
     if (!user) {
       throw new AppError('Unauthorized', 401);
     }
-    if (!(await verifyPassword(password, user.passwordHash))) {
+    if (!user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
       throw new AppError('Password is incorrect', 400);
     }
     if (!user.twoFactorEnabled) {

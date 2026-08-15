@@ -11,9 +11,19 @@ import * as notesService from '../notes/notes.service';
 import { z } from 'zod';
 import { mintLiveKitToken } from '../livekit/tokens';
 import type { UserRole } from '../../utils/tokens';
+import { extractMeasurements } from '../clinical-intelligence/clinical-intelligence.service';
+import * as measurementRequestsService from '../clinical-intelligence/measurement-requests.service';
+import {
+  confirmRequestsSchema,
+  createRequestsSchema,
+  deviceCaptureSchema,
+  extractMeasurementsSchema,
+  respondRequestSchema,
+} from '../clinical-intelligence/schemas';
 
 const router = Router();
 const staffAuth = requireAuth('doctor', 'healthAssistant');
+const doctorAuth = requireAuth('doctor');
 const callAuth = requireAuth('doctor', 'healthAssistant', 'patient');
 
 function ensureSessionId(apt: {
@@ -56,7 +66,7 @@ async function findAppointmentForToken(id: string) {
 
   appointment = await Appointment.findOne({
     patientId: patientObjectId,
-    status: { $in: ['CONFIRMED', 'PENDING_CONFIRMATION'] },
+    status: { $in: ['CONFIRMED', 'PENDING_CONFIRMATION', 'IN_PROGRESS'] },
   }).sort({ startTime: 1 });
 
   if (!appointment) {
@@ -129,6 +139,17 @@ router.get(
   })
 );
 
+const sharePlanSchema = z.object({
+  recipients: z
+    .array(z.enum(['patient', 'healthAssistant']))
+    .min(1)
+    .optional(),
+  fields: z
+    .array(z.enum(['subjective', 'objective', 'assessment', 'plan']))
+    .min(1)
+    .optional(),
+});
+
 const soapSchema = z.object({
   subjective: z.string().optional().default(''),
   objective: z.string().optional().default(''),
@@ -139,35 +160,164 @@ const soapSchema = z.object({
 
 router.put(
   '/notes/:noteId',
-  staffAuth,
+  doctorAuth,
   asyncHandler(async (req, res) => {
     const body = soapSchema.parse(req.body);
-    const result = await notesService.updateNote(param(req.params.noteId), body);
+    const result = await notesService.updateNote(
+      param(req.params.noteId),
+      req.auth!.id,
+      body
+    );
     res.json(result);
   })
 );
 
 router.post(
   '/:id/soap',
-  staffAuth,
+  doctorAuth,
   asyncHandler(async (req, res) => {
     const body = soapSchema.parse(req.body);
-    const result = await notesService.upsertSoap(param(req.params.id), {
-      subjective: body.subjective ?? '',
-      objective: body.objective ?? '',
-      assessment: body.assessment ?? '',
-      plan: body.plan ?? '',
-      action: body.action,
-    });
+    const result = await notesService.upsertSoap(
+      param(req.params.id),
+      req.auth!.id,
+      {
+        subjective: body.subjective ?? '',
+        objective: body.objective ?? '',
+        assessment: body.assessment ?? '',
+        plan: body.plan ?? '',
+        action: body.action,
+      }
+    );
     res.status(201).json(result);
   })
 );
 
 router.post(
+  '/:id/note/share',
+  doctorAuth,
+  asyncHandler(async (req, res) => {
+    const body = sharePlanSchema.parse(req.body ?? {});
+    const result = await notesService.sharePlan(
+      param(req.params.id),
+      req.auth!.id,
+      body
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/start',
+  callAuth,
+  asyncHandler(async (req, res) => {
+    const result = await appointmentsService.startConsultation(
+      param(req.params.id)
+    );
+    res.json(result);
+  })
+);
+
+router.post(
   '/:id/complete',
+  doctorAuth,
+  asyncHandler(async (req, res) => {
+    const result = await notesService.completeConsultation(
+      param(req.params.id),
+      req.auth!.id
+    );
+    res.json(result);
+  })
+);
+
+router.patch(
+  '/:id/device-capture',
   staffAuth,
   asyncHandler(async (req, res) => {
-    const result = await notesService.completeConsultation(param(req.params.id));
+    const body = deviceCaptureSchema.parse(req.body);
+    const result = await measurementRequestsService.setDeviceCaptureEnabled(
+      param(req.params.id),
+      body.enabled,
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/extract-measurements',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const body = extractMeasurementsSchema.parse(req.body);
+    const extracted = await extractMeasurements(body.text);
+    const result = await measurementRequestsService.upsertSuggestedRequests(
+      param(req.params.id),
+      extracted.measurements.map((item) => ({
+        vitalType: item.vitalType,
+        label: item.label,
+        source: extracted.strategy === 'ai' ? 'ai' : 'rules',
+      })),
+      req.auth!
+    );
+    res.json({
+      ...result,
+      strategy: extracted.strategy,
+      degraded: extracted.degraded,
+    });
+  })
+);
+
+router.get(
+  '/:id/measurement-requests',
+  callAuth,
+  asyncHandler(async (req, res) => {
+    const result = await measurementRequestsService.getMeasurementState(
+      param(req.params.id),
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/measurement-requests',
+  staffAuth,
+  asyncHandler(async (req, res) => {
+    const body = confirmRequestsSchema.parse(req.body);
+    const result = await measurementRequestsService.confirmMeasurementRequests(
+      param(req.params.id),
+      body.requestIds,
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/measurement-requests/manual',
+  doctorAuth,
+  asyncHandler(async (req, res) => {
+    const body = createRequestsSchema.parse(req.body);
+    const result = await measurementRequestsService.createManualRequests(
+      param(req.params.id),
+      body.vitalTypes,
+      req.auth!
+    );
+    res.json(result);
+  })
+);
+
+router.patch(
+  '/:id/measurement-requests/:requestId',
+  callAuth,
+  asyncHandler(async (req, res) => {
+    const body = respondRequestSchema.parse(req.body);
+    const result = await measurementRequestsService.respondToMeasurementRequest(
+      param(req.params.id),
+      param(req.params.requestId),
+      body.status,
+      body.patientResponse,
+      req.auth!
+    );
     res.json(result);
   })
 );

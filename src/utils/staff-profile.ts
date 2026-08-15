@@ -110,13 +110,20 @@ export function serializeStaffProfile(user: StaffProfileFields & {
   };
 }
 
-export function defaultAvailabilityDays() {
-  const weekday = [{ start: '09:00', end: '17:00' }];
+export function defaultAvailabilityDays(): Record<
+  DayName,
+  { start: string; end: string }[]
+> {
+  const weekday = (): { start: string; end: string }[] => [
+    { start: '09:00', end: '17:00' },
+  ];
   return {
-    Monday: weekday,
-    Tuesday: weekday,
-    Wednesday: weekday,
-    Thursday: weekday,
-    Friday: weekday,
+    Sunday: [],
+    Monday: weekday(),
+    Tuesday: weekday(),
+    Wednesday: weekday(),
+    Thursday: weekday(),
+    Friday: weekday(),
+    Saturday: [],
   };
 }

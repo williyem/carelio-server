@@ -6,6 +6,9 @@ import { buildPaginatedResult, parsePagination } from "../../utils/paginate";
 import { generateAppointmentCode } from "../../utils/ids";
 import { serializeAppointment } from "../../serializers/appointment.serializer";
 import type { UserRole } from "../../utils/tokens";
+import type { AuthUser } from "../../middleware/auth";
+import { requirePatientAccess } from "../patients/patients.service";
+import * as availabilityService from "../availability/availability.service";
 
 async function resolvePatientObjectId(
   patientId: string,
@@ -27,11 +30,37 @@ async function getPopulated(id: string) {
   return apt;
 }
 
+const UPCOMING_STATUSES: IAppointment["status"][] = [
+  "CONFIRMED",
+  "PENDING_CONFIRMATION",
+  "IN_PROGRESS",
+];
+
+function upcomingTimeFilter(now = new Date()) {
+  return {
+    status: { $in: UPCOMING_STATUSES },
+    endTime: { $gt: now },
+  };
+}
+
+function scopeAppointmentsByRole(
+  filter: Record<string, unknown>,
+  auth: { id: string; role: UserRole },
+) {
+  if (auth.role === "doctor") {
+    filter.doctorId = new Types.ObjectId(auth.id);
+  }
+  if (auth.role === "healthAssistant") {
+    filter.bookedByAssistantId = new Types.ObjectId(auth.id);
+  }
+}
+
 export async function listAppointments(
   query: {
     page?: number;
     limit?: number;
     status?: string;
+    upcoming?: string;
     startDate?: string;
     endDate?: string;
   },
@@ -40,11 +69,13 @@ export async function listAppointments(
   const { page, limit, skip } = parsePagination(query);
   const filter: Record<string, unknown> = {};
 
-  if (auth.role === "doctor") {
-    filter.doctorId = new Types.ObjectId(auth.id);
-  }
+  scopeAppointmentsByRole(filter, auth);
 
-  if (query.status) filter.status = query.status as IAppointment["status"];
+  if (query.upcoming === "true") {
+    Object.assign(filter, upcomingTimeFilter());
+  } else if (query.status) {
+    filter.status = query.status as IAppointment["status"];
+  }
 
   if (query.startDate || query.endDate) {
     filter.startTime = {};
@@ -89,13 +120,10 @@ export async function listUpcoming(
   });
 
   const filter: Record<string, unknown> = {
-    status: { $in: ["CONFIRMED", "PENDING_CONFIRMATION"] },
-    startTime: { $gte: new Date() },
+    ...upcomingTimeFilter(),
   };
 
-  if (auth.role === "doctor") {
-    filter.doctorId = new Types.ObjectId(auth.id);
-  }
+  scopeAppointmentsByRole(filter, auth);
 
   const [docs, totalDocs] = await Promise.all([
     Appointment.find(filter)
@@ -140,13 +168,17 @@ export async function getAppointmentById(id: string) {
 
 export async function listPatientAppointments(
   patientIdParam: string,
-  query: { page?: number; limit?: number; status?: string },
+  query: { page?: number; limit?: number; status?: string; upcoming?: string },
 ) {
   const { page, limit, skip } = parsePagination(query);
   const patientObjectId = await resolvePatientObjectId(patientIdParam);
 
   const filter: Record<string, unknown> = { patientId: patientObjectId };
-  if (query.status) filter.status = query.status as IAppointment["status"];
+  if (query.upcoming === "true") {
+    Object.assign(filter, upcomingTimeFilter());
+  } else if (query.status) {
+    filter.status = query.status as IAppointment["status"];
+  }
 
   const [docs, totalDocs] = await Promise.all([
     Appointment.find(filter)
@@ -191,6 +223,9 @@ export async function createAppointment(
     }
     patientObjectId = self._id as Types.ObjectId;
   } else {
+    if (auth.role === "healthAssistant") {
+      await requirePatientAccess(input.patientId, auth as AuthUser);
+    }
     patientObjectId = await resolvePatientObjectId(input.patientId);
   }
 
@@ -229,6 +264,7 @@ export async function createAppointment(
     if (endTime <= startTime) {
       throw new AppError("endTime must be after startTime", 400);
     }
+    await availabilityService.assertBookableSlot(doctorId, startTime, endTime);
     status = "CONFIRMED";
   }
 
@@ -241,6 +277,8 @@ export async function createAppointment(
   const apt = await Appointment.create({
     patientId: patientObjectId,
     doctorId: new Types.ObjectId(doctorId),
+    bookedByAssistantId:
+      auth.role === "healthAssistant" ? new Types.ObjectId(auth.id) : null,
     startTime,
     endTime,
     isImmediate: input.isImmediate,
@@ -261,9 +299,14 @@ export async function rescheduleAppointment(
 ) {
   const apt = await Appointment.findById(id);
   if (!apt) throw new AppError("Appointment not found", 404);
-  if (apt.status === "CANCELLED" || apt.status === "COMPLETED") {
+  if (
+    apt.status === "CANCELLED" ||
+    apt.status === "COMPLETED" ||
+    apt.status === "MISSED" ||
+    apt.status === "IN_PROGRESS"
+  ) {
     throw new AppError(
-      `Cannot reschedule a ${apt.status.toLowerCase()} appointment`,
+      `Cannot reschedule a ${apt.status.toLowerCase().replace("_", " ")} appointment`,
       400,
     );
   }
@@ -276,6 +319,13 @@ export async function rescheduleAppointment(
   if (endTime <= startTime) {
     throw new AppError("endTime must be after startTime", 400);
   }
+
+  await availabilityService.assertBookableSlot(
+    apt.doctorId.toString(),
+    startTime,
+    endTime,
+    { excludeAppointmentId: apt._id.toString() },
+  );
 
   apt.startTime = startTime;
   apt.endTime = endTime;
@@ -298,8 +348,11 @@ export async function cancelAppointment(
   if (apt.status === "CANCELLED") {
     throw new AppError("Appointment is already cancelled", 400);
   }
-  if (apt.status === "COMPLETED") {
-    throw new AppError("Cannot cancel a completed appointment", 400);
+  if (apt.status === "COMPLETED" || apt.status === "MISSED") {
+    throw new AppError(
+      `Cannot cancel a ${apt.status.toLowerCase()} appointment`,
+      400,
+    );
   }
 
   apt.status = "CANCELLED";
@@ -310,4 +363,48 @@ export async function cancelAppointment(
 
   const populated = await getPopulated(apt._id.toString());
   return serializeAppointment(populated);
+}
+
+export async function startConsultation(id: string) {
+  const apt = await Appointment.findById(id);
+  if (!apt) throw new AppError("Appointment not found", 404);
+  if (
+    apt.status === "CANCELLED" ||
+    apt.status === "COMPLETED" ||
+    apt.status === "MISSED"
+  ) {
+    throw new AppError(
+      `Cannot start a ${apt.status.toLowerCase()} appointment`,
+      400,
+    );
+  }
+
+  if (apt.status !== "IN_PROGRESS") {
+    apt.status = "IN_PROGRESS";
+    await apt.save();
+  }
+
+  const populated = await getPopulated(apt._id.toString());
+  return serializeAppointment(populated);
+}
+
+export async function expireAppointmentStatuses(now = new Date()) {
+  const [completed, missed] = await Promise.all([
+    Appointment.updateMany(
+      { status: "IN_PROGRESS", endTime: { $lte: now } },
+      { $set: { status: "COMPLETED" } },
+    ),
+    Appointment.updateMany(
+      {
+        status: { $in: ["CONFIRMED", "PENDING_CONFIRMATION"] },
+        endTime: { $lte: now },
+      },
+      { $set: { status: "MISSED" } },
+    ),
+  ]);
+
+  return {
+    completed: completed.modifiedCount,
+    missed: missed.modifiedCount,
+  };
 }

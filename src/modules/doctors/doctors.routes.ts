@@ -38,7 +38,7 @@ router.get(
           avatarUrl: d.avatarUrl || '',
           title: d.title || '',
           specialty: d.specialty || '',
-          timezone: d.timezone || 'America/New_York',
+          timezone: 'GMT',
           createdAt: d.createdAt.toISOString(),
           updatedAt: d.updatedAt.toISOString(),
         })),

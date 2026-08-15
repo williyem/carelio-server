@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { Types } from 'mongoose';
 import { asyncHandler } from '../../utils/async-handler';
 import { param } from '../../utils/params';
 import { requireAuth } from '../../middleware/auth';
@@ -7,6 +6,7 @@ import { listAppointmentsQuerySchema } from './schemas';
 import * as appointmentsService from './appointments.service';
 import { AppError } from '../../utils/errors';
 import { Patient } from '../../models';
+import { requirePatientAccess } from '../patients/patients.service';
 
 const router = Router({ mergeParams: true });
 const staffOrPatientAuth = requireAuth('doctor', 'healthAssistant', 'patient');
@@ -38,6 +38,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const patientIdParam = param(req.params.patientId);
     await assertPatientCanAccess(req.auth!, patientIdParam);
+    if (req.auth!.role === 'doctor' || req.auth!.role === 'healthAssistant') {
+      await requirePatientAccess(patientIdParam, req.auth!);
+    }
 
     const query = listAppointmentsQuerySchema.parse(req.query);
     const result = await appointmentsService.listPatientAppointments(

@@ -4,6 +4,7 @@ import { AppError } from '../../utils/errors';
 import {
   DAYS_OF_WEEK,
   defaultAvailabilityDays,
+  type DayName,
 } from '../../utils/staff-profile';
 
 export interface TimeRange {
@@ -16,6 +17,9 @@ export interface HourSlot {
   end: string;
   label: string;
 }
+
+const GMT_TIMEZONE = 'GMT';
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function toMinutes(time: string): number {
   const [hours, minutes] = time.split(':').map(Number);
@@ -54,15 +58,46 @@ export function splitRangesIntoHourSlots(ranges: TimeRange[]): HourSlot[] {
   return slots;
 }
 
+function normalizeRange(range: TimeRange): TimeRange {
+  const start = String(range?.start ?? '').slice(0, 5);
+  const end = String(range?.end ?? '').slice(0, 5);
+  if (!TIME_RE.test(start) || !TIME_RE.test(end)) {
+    throw new AppError('Times must be HH:MM in GMT', 400);
+  }
+  if (toMinutes(start) >= toMinutes(end)) {
+    throw new AppError('Each period must end after it starts', 400);
+  }
+  return { start, end };
+}
+
+function asDaysRecord(value: unknown): Record<string, TimeRange[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, TimeRange[]>;
+}
+
+export function normalizeDays(
+  days?: Record<string, TimeRange[]> | null
+): Record<DayName, TimeRange[]> {
+  const source = asDaysRecord(days);
+  const normalized = {} as Record<DayName, TimeRange[]>;
+  for (const day of DAYS_OF_WEEK) {
+    const ranges = source[day];
+    normalized[day] = Array.isArray(ranges) ? ranges.map(normalizeRange) : [];
+  }
+  return normalized;
+}
+
 function serializeAvailability(doc: {
   timezone: string;
   enabled: boolean;
   days: Record<string, TimeRange[]>;
 }) {
   return {
-    timezone: doc.timezone || 'America/New_York',
+    timezone: GMT_TIMEZONE,
     enabled: doc.enabled,
-    days: doc.days || {},
+    days: normalizeDays(doc.days),
   };
 }
 
@@ -78,7 +113,7 @@ async function getOrCreate(doctorId: string) {
   if (!record) {
     record = await DoctorAvailability.create({
       doctorId: new Types.ObjectId(doctorId),
-      timezone: doctor.timezone || 'America/New_York',
+      timezone: GMT_TIMEZONE,
       enabled: true,
       days: defaultAvailabilityDays(),
     });
@@ -86,47 +121,104 @@ async function getOrCreate(doctorId: string) {
   return record;
 }
 
-export async function getAvailability(doctorId: string, date?: string) {
+export async function getAvailability(
+  doctorId: string,
+  date?: string,
+  options?: { excludeAppointmentId?: string }
+) {
   const record = await getOrCreate(doctorId);
-  const base = serializeAvailability(record);
+  const days = normalizeDays(asDaysRecord(record.days));
+  const base = {
+    timezone: GMT_TIMEZONE,
+    enabled: record.enabled,
+    days,
+  };
 
   if (!date) return base;
 
-  const parsed = new Date(`${date}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new AppError('Invalid date', 400);
+  }
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(dayStart.getTime())) {
     throw new AppError('Invalid date', 400);
   }
 
-  const dayName = DAYS_OF_WEEK[parsed.getDay()];
+  const dayName = DAYS_OF_WEEK[dayStart.getUTCDay()];
   const ranges: TimeRange[] = record.enabled
-    ? (record.days?.[dayName] as TimeRange[]) || []
+    ? days[dayName] || []
     : [{ start: '08:00', end: '18:00' }];
 
   let slots = splitRangesIntoHourSlots(ranges);
 
-  const dayStart = new Date(parsed);
-  const dayEnd = new Date(parsed);
-  dayEnd.setHours(23, 59, 59, 999);
-
-  const busy = await Appointment.find({
+  const dayEnd = new Date(`${date}T23:59:59.999Z`);
+  const busyFilter: Record<string, unknown> = {
     doctorId: new Types.ObjectId(doctorId),
-    status: { $in: ['PENDING_CONFIRMATION', 'CONFIRMED', 'COMPLETED'] },
+    status: {
+      $in: ['PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED'],
+    },
     startTime: { $lt: dayEnd },
     endTime: { $gt: dayStart },
-  }).select('startTime endTime');
+  };
+  if (options?.excludeAppointmentId) {
+    busyFilter._id = { $ne: new Types.ObjectId(options.excludeAppointmentId) };
+  }
+
+  const busy = await Appointment.find(busyFilter).select('startTime endTime');
 
   slots = slots.filter((slot) => {
     const slotStart = toMinutes(slot.start);
     const slotEnd = toMinutes(slot.end);
     return !busy.some((apt) => {
       if (!apt.startTime || !apt.endTime) return false;
-      const busyStart = apt.startTime.getHours() * 60 + apt.startTime.getMinutes();
-      const busyEnd = apt.endTime.getHours() * 60 + apt.endTime.getMinutes();
+      const busyStart =
+        apt.startTime.getUTCHours() * 60 + apt.startTime.getUTCMinutes();
+      const busyEnd =
+        apt.endTime.getUTCHours() * 60 + apt.endTime.getUTCMinutes();
       return slotStart < busyEnd && busyStart < slotEnd;
     });
   });
 
+  const todayGmt = new Date().toISOString().slice(0, 10);
+  if (date === todayGmt) {
+    const now = new Date();
+    const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+    slots = slots.filter((slot) => toMinutes(slot.start) > nowMin);
+  }
+
   return { ...base, date, slots };
+}
+
+export async function assertBookableSlot(
+  doctorId: string,
+  start: Date,
+  end: Date,
+  options?: { excludeAppointmentId?: string }
+) {
+  const date = start.toISOString().slice(0, 10);
+  if (end.toISOString().slice(0, 10) !== date) {
+    throw new AppError('Appointments must start and end on the same GMT day', 400);
+  }
+
+  const availability = await getAvailability(doctorId, date, options);
+  if (!('slots' in availability)) {
+    throw new AppError(
+      "Selected time is outside this doctor's available hours",
+      400
+    );
+  }
+  const startMin = start.getUTCHours() * 60 + start.getUTCMinutes();
+  const endMin = end.getUTCHours() * 60 + end.getUTCMinutes();
+  const matches = availability.slots.some(
+    (slot) =>
+      toMinutes(slot.start) === startMin && toMinutes(slot.end) === endMin
+  );
+  if (!matches) {
+    throw new AppError(
+      "Selected time is outside this doctor's available hours",
+      400
+    );
+  }
 }
 
 export async function updateAvailability(
@@ -138,17 +230,17 @@ export async function updateAvailability(
   }
 ) {
   const record = await getOrCreate(doctorId);
-  if (typeof input.timezone === 'string') record.timezone = input.timezone;
+  record.timezone = GMT_TIMEZONE;
   if (typeof input.enabled === 'boolean') record.enabled = input.enabled;
   if (input.days && typeof input.days === 'object') {
-    record.days = input.days;
+    record.days = normalizeDays(input.days);
     record.markModified('days');
   }
   await record.save();
 
   const doctor = await Doctor.findById(doctorId);
-  if (doctor && input.timezone) {
-    doctor.timezone = input.timezone;
+  if (doctor) {
+    doctor.timezone = GMT_TIMEZONE;
     await doctor.save();
   }
 

@@ -7,10 +7,11 @@ import * as vitalsService from './vitals.service';
 
 const router = Router();
 const staffAuth = requireAuth('doctor', 'healthAssistant');
+const callAuth = requireAuth('doctor', 'healthAssistant', 'patient');
 
 router.post(
   '/',
-  staffAuth,
+  callAuth,
   asyncHandler(async (req, res) => {
     const body = createVitalSchema.parse(req.body);
     const result = await vitalsService.createVital(body, req.auth!);
@@ -20,7 +21,7 @@ router.post(
 
 router.get(
   '/appointment/:appointmentId',
-  staffAuth,
+  callAuth,
   asyncHandler(async (req, res) => {
     const result = await vitalsService.listByAppointment(
       param(req.params.appointmentId)
@@ -39,6 +40,19 @@ router.post(
       body.vitalIds
     );
     res.json({ message: 'Vitals confirmed' });
+  })
+);
+
+router.post(
+  '/appointment/:appointmentId/reject',
+  requireAuth('doctor'),
+  asyncHandler(async (req, res) => {
+    const body = confirmVitalsSchema.parse(req.body);
+    await vitalsService.rejectVitals(
+      param(req.params.appointmentId),
+      body.vitalIds
+    );
+    res.json({ message: 'Vitals rejected' });
   })
 );
 

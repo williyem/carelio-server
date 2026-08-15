@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import { param } from '../../utils/params';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireCronSecret } from '../../middleware/auth';
 import {
   listAppointmentsQuerySchema,
   createAppointmentSchema,
@@ -36,6 +36,15 @@ router.get(
   })
 );
 
+router.post(
+  '/status/expire',
+  requireCronSecret,
+  asyncHandler(async (_req, res) => {
+    const result = await appointmentsService.expireAppointmentStatuses();
+    res.json(result);
+  })
+);
+
 router.get(
   '/recent',
   doctorAuth,
@@ -49,7 +58,10 @@ router.get(
   '/:id/note',
   staffOrPatientAuth,
   asyncHandler(async (req, res) => {
-    const result = await notesService.getNoteByAppointment(param(req.params.id));
+    const result = await notesService.getNoteByAppointment(
+      param(req.params.id),
+      req.auth?.role
+    );
     res.json(result);
   })
 );

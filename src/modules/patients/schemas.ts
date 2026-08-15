@@ -31,6 +31,15 @@ export const updatePatientSchema = z
       .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
       .optional(),
     allergies: z.array(z.string()).optional(),
+    medications: z.array(z.string()).optional(),
+    conditions: z.array(z.string()).optional(),
+    emergencyContact: z
+      .object({
+        name: z.string().optional(),
+        relationship: z.string().optional(),
+        phone: z.string().optional(),
+      })
+      .optional(),
     chiefComplaint: z.string().nullable().optional(),
     isActive: z.boolean().optional(),
     isRegistrationComplete: z.boolean().optional(),
@@ -38,11 +47,6 @@ export const updatePatientSchema = z
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field is required',
   });
-
-export const assignPatientSchema = z.object({
-  patientId: z.string().min(1),
-  assistantId: z.string().min(1),
-});
 
 export const doctorInviteSchema = z.object({
   email: z.string().email(),

@@ -2,10 +2,11 @@ import { connectDb } from '../db/connect';
 import { Doctor, HealthAssistant, Patient, Appointment } from '../models';
 import { hashPassword } from '../utils/passwords';
 import { generateAppointmentCode } from '../utils/ids';
+import { seedDeviceGuides } from '../modules/device-guides/device-guides.service';
 
 async function seed() {
   await connectDb();
-
+  await seedDeviceGuides();
   const doctorEmail = 'dr.smith@carelio.app';
   const password = 'Password123!';
   const passwordHash = await hashPassword(password);
@@ -20,6 +21,31 @@ async function seed() {
       phoneNumber: '+233200000001',
       twoFactorEnabled: false,
       isActive: true,
+      isAdmin: false,
+      mustResetPassword: false,
+      emailVerified: true,
+      onboardingCompletedAt: new Date(),
+    },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+  );
+
+  const adminEmail = 'admin@carelio.app';
+  const admin = await Doctor.findOneAndUpdate(
+    { email: adminEmail },
+    {
+      email: adminEmail,
+      passwordHash,
+      firstName: 'Carelio',
+      lastName: 'Admin',
+      phoneNumber: '+233200000000',
+      twoFactorEnabled: false,
+      isActive: true,
+      isAdmin: true,
+      mustResetPassword: false,
+      emailVerified: true,
+      title: 'Super admin',
+      clinicName: 'Carelio Clinic',
+      onboardingCompletedAt: new Date(),
     },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
@@ -36,6 +62,8 @@ async function seed() {
       twoFactorEnabled: false,
       isActive: true,
       mustResetPassword: false,
+      emailVerified: true,
+      onboardingCompletedAt: new Date(),
     },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
@@ -57,11 +85,18 @@ async function seed() {
       address: 'Accra, Ghana',
       bloodType: 'O+' as const,
       allergies: ['Penicillin'],
+      medications: ['Sumatriptan'],
+      conditions: ['Migraine'],
+      emergencyContact: {
+        name: 'Kwame Mensah',
+        relationship: 'Spouse',
+        phone: '+233200000010',
+      },
       chiefComplaint: 'Recurring headaches',
-      assignedAssistantId: ha._id,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: true,
+      passwordHash,
     },
     {
       patientId: 'PAT-1002',
@@ -73,11 +108,18 @@ async function seed() {
       address: '12 Independence Ave, Accra',
       bloodType: 'A+' as const,
       allergies: [],
+      medications: [],
+      conditions: ['Fatigue'],
+      emergencyContact: {
+        name: 'Jane Doe',
+        relationship: 'Sister',
+        phone: '+233201111111',
+      },
       chiefComplaint: 'Fatigue',
-      assignedAssistantId: ha._id,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: true,
+      passwordHash,
     },
     {
       patientId: 'PAT-1003',
@@ -89,11 +131,18 @@ async function seed() {
       address: '45 Ring Road, Kumasi',
       bloodType: 'B+' as const,
       allergies: ['Latex'],
+      medications: [],
+      conditions: ['Anxiety'],
+      emergencyContact: {
+        name: 'Michael Johnson',
+        relationship: 'Father',
+        phone: '+233209999999',
+      },
       chiefComplaint: 'Anxiety',
-      assignedAssistantId: null,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: false,
+      passwordHash,
     },
     {
       patientId: 'PAT-1004',
@@ -106,7 +155,6 @@ async function seed() {
       bloodType: null,
       allergies: [],
       chiefComplaint: null,
-      assignedAssistantId: null,
       isRegistrationComplete: false,
       phoneVerified: false,
       emailVerified: false,
@@ -118,9 +166,12 @@ async function seed() {
     const p = await Patient.findOneAndUpdate(
       { patientId: data.patientId },
       {
-        ...data,
-        invitedByDoctorId: doctor._id,
-        isActive: true,
+        $set: {
+          ...data,
+          invitedByDoctorId: doctor._id,
+          isActive: true,
+        },
+        $unset: { assignedAssistantId: '' },
       },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
@@ -185,9 +236,11 @@ async function seed() {
   }
 
   console.log('Seed complete:');
+  console.log(`  Super admin: ${admin.email} / ${password}`);
   console.log(`  Doctor: ${doctor.email} / ${password}`);
   console.log(`  Health Assistant: ${ha.email} / ${password} (${ha.staffCode})`);
   console.log(`  Patients: ${patients.map((p) => p.patientId).join(', ')}`);
+  console.log(`  Patient portal password: ${password}`);
   process.exit(0);
 }
 

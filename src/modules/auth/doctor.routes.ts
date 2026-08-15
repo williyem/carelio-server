@@ -4,7 +4,6 @@ import { asyncHandler } from '../../utils/async-handler';
 import { requireAuth } from '../../middleware/auth';
 import { createStaffAuthService } from './staff-auth.service';
 import {
-  registerSchema,
   loginSchema,
   verify2FASchema,
   forgotPasswordSchema,
@@ -26,14 +25,11 @@ const doctorAuth = createStaffAuthService({
 
 const router = Router();
 
-router.post(
-  '/register',
-  asyncHandler(async (req, res) => {
-    const body = registerSchema.parse(req.body);
-    const result = await doctorAuth.register(body);
-    res.status(201).json(result);
-  })
-);
+router.post('/register', (_req, res) => {
+  res.status(403).json({
+    message: 'Staff accounts are created by a Super admin',
+  });
+});
 
 router.post(
   '/login',
