@@ -8,7 +8,7 @@ export type TwoFactorMethod = 'totp' | 'email';
 
 export interface IDoctor extends Document, StaffProfileFields {
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
   firstName: string;
   lastName: string;
   phoneNumber: string;
@@ -20,6 +20,9 @@ export interface IDoctor extends Document, StaffProfileFields {
   isActive: boolean;
   isAdmin: boolean;
   mustResetPassword: boolean;
+  emailVerified: boolean;
+  invitationTokenHash?: string;
+  invitationExpiresAt?: Date;
   resetOtpHash?: string;
   resetOtpExpiresAt?: Date;
   createdAt: Date;
@@ -35,7 +38,7 @@ const doctorSchema = new Schema<IDoctor>(
       lowercase: true,
       trim: true,
     },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String },
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     phoneNumber: { type: String, required: true, trim: true },
@@ -47,6 +50,9 @@ const doctorSchema = new Schema<IDoctor>(
     isActive: { type: Boolean, default: true },
     isAdmin: { type: Boolean, default: false },
     mustResetPassword: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: false },
+    invitationTokenHash: { type: String },
+    invitationExpiresAt: { type: Date },
     resetOtpHash: { type: String },
     resetOtpExpiresAt: { type: Date },
     ...staffProfileSchemaFields,

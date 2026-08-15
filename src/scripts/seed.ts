@@ -22,6 +22,8 @@ async function seed() {
       isActive: true,
       isAdmin: false,
       mustResetPassword: false,
+      emailVerified: true,
+      onboardingCompletedAt: new Date(),
     },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
@@ -39,6 +41,7 @@ async function seed() {
       isActive: true,
       isAdmin: true,
       mustResetPassword: false,
+      emailVerified: true,
       title: 'Super admin',
       clinicName: 'Carelio Clinic',
       onboardingCompletedAt: new Date(),
@@ -58,6 +61,8 @@ async function seed() {
       twoFactorEnabled: false,
       isActive: true,
       mustResetPassword: false,
+      emailVerified: true,
+      onboardingCompletedAt: new Date(),
     },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );

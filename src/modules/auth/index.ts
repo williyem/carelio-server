@@ -2,6 +2,7 @@ import { Router } from 'express';
 import doctorRoutes from './doctor.routes';
 import healthAssistantRoutes from './health-assistant.routes';
 import patientRoutes from './patient.routes';
+import staffInviteRoutes from './staff-invite.routes';
 import {
   doctorInviteRouter,
   assistantInviteRouter,
@@ -18,6 +19,7 @@ authRouter.use('/doctor', doctorInviteRouter);
 authRouter.use('/assistant', healthAssistantRoutes);
 authRouter.use('/assistant', assistantInviteRouter);
 authRouter.use('/patient', patientRoutes);
+authRouter.use('/staff', staffInviteRoutes);
 
 // Alias used by some BFF paths: POST /auth/patient/invite
 authRouter.post(

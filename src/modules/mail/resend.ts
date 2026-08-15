@@ -73,6 +73,27 @@ export async function sendInviteEmail(input: {
   return sendEmail({ to: input.to, subject, html, text });
 }
 
+export async function sendStaffInviteEmail(input: {
+  to: string;
+  inviteLink: string;
+  role: 'doctor' | 'healthAssistant';
+  firstName?: string;
+}) {
+  const roleLabel = input.role === 'doctor' ? 'doctor' : 'health assistant';
+  const greeting = input.firstName ? `Hello ${input.firstName},` : 'Hello,';
+  const subject = `You are invited to join Carelio as a ${roleLabel}`;
+  const text = `${greeting} You have been invited to Carelio as a ${roleLabel}. Open this link to set your password and complete onboarding: ${input.inviteLink}`;
+  const html = `
+    <p>${greeting}</p>
+    <p>You have been invited to join <strong>Carelio</strong> as a <strong>${roleLabel}</strong>.</p>
+    <p><a href="${input.inviteLink}">Complete your onboarding</a></p>
+    <p>Or copy this link:<br/><code>${input.inviteLink}</code></p>
+    <p>This link expires in 7 days.</p>
+  `;
+
+  return sendEmail({ to: input.to, subject, html, text });
+}
+
 export async function sendDoctorAccessRequestEmail(input: {
   to: string;
   patientName: string;
