@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Types } from 'mongoose';
-import { Appointment, Patient, type IMeasurementRequest } from '../../models';
+import { Appointment, type IMeasurementRequest } from '../../models';
 import { AppError } from '../../utils/errors';
 import type { UserRole } from '../../utils/tokens';
 import {
@@ -52,11 +52,11 @@ async function assertParticipant(
   }
 
   if (auth.role === 'healthAssistant') {
-    const patient = await Patient.findById(appointment.patientId);
-    if (!patient?.assignedAssistantId?.equals(auth.id)) {
-      throw new AppError('Forbidden', 403);
-    }
+    // Any authenticated HA on the consultation may help with devices.
+    return;
   }
+
+  throw new AppError('Forbidden', 403);
 }
 
 export async function getMeasurementState(

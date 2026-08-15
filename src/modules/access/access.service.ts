@@ -40,7 +40,7 @@ export async function hasActiveGrant(patientId: string, granteeId: string) {
 
 export async function isStaffLinkedToPatient(
   auth: AuthUser,
-  patient: { _id: Types.ObjectId; invitedByDoctorId?: Types.ObjectId | null; assignedAssistantId?: Types.ObjectId | null }
+  patient: { _id: Types.ObjectId; invitedByDoctorId?: Types.ObjectId | null }
 ) {
   const patientId = patient._id.toString();
   if (auth.role === 'doctor') {
@@ -51,15 +51,12 @@ export async function isStaffLinkedToPatient(
     });
     if (hasVisit) return true;
   }
-  if (auth.role === 'healthAssistant') {
-    if (patient.assignedAssistantId?.toString() === auth.id) return true;
-  }
   return hasActiveGrant(patientId, auth.id);
 }
 
 export async function assertStaffLinkedToPatient(
   auth: AuthUser,
-  patient: { _id: Types.ObjectId; invitedByDoctorId?: Types.ObjectId | null; assignedAssistantId?: Types.ObjectId | null }
+  patient: { _id: Types.ObjectId; invitedByDoctorId?: Types.ObjectId | null }
 ) {
   const linked = await isStaffLinkedToPatient(auth, patient);
   if (!linked) {
@@ -74,21 +71,22 @@ export async function linkedPatientIdSet(
   const linked = new Set<string>();
   if (!patientIds.length) return linked;
 
-  const patients = await Patient.find({ _id: { $in: patientIds } }).select(
-    'invitedByDoctorId assignedAssistantId'
-  );
-  for (const patient of patients) {
-    if (
-      auth.role === 'doctor' &&
-      patient.invitedByDoctorId?.toString() === auth.id
-    ) {
-      linked.add(patient._id.toString());
+  if (auth.role === 'doctor') {
+    const patients = await Patient.find({ _id: { $in: patientIds } }).select(
+      'invitedByDoctorId'
+    );
+    for (const patient of patients) {
+      if (patient.invitedByDoctorId?.toString() === auth.id) {
+        linked.add(patient._id.toString());
+      }
     }
-    if (
-      auth.role === 'healthAssistant' &&
-      patient.assignedAssistantId?.toString() === auth.id
-    ) {
-      linked.add(patient._id.toString());
+
+    const visits = await Appointment.find({
+      doctorId: new Types.ObjectId(auth.id),
+      patientId: { $in: patientIds },
+    }).select('patientId');
+    for (const visit of visits) {
+      linked.add(visit.patientId.toString());
     }
   }
 
@@ -97,16 +95,6 @@ export async function linkedPatientIdSet(
   ).select('patientId');
   for (const grant of grants) {
     linked.add(grant.patientId.toString());
-  }
-
-  if (auth.role === 'doctor') {
-    const visits = await Appointment.find({
-      doctorId: new Types.ObjectId(auth.id),
-      patientId: { $in: patientIds },
-    }).select('patientId');
-    for (const visit of visits) {
-      linked.add(visit.patientId.toString());
-    }
   }
 
   return linked;

@@ -163,7 +163,11 @@ router.put(
   doctorAuth,
   asyncHandler(async (req, res) => {
     const body = soapSchema.parse(req.body);
-    const result = await notesService.updateNote(param(req.params.noteId), body);
+    const result = await notesService.updateNote(
+      param(req.params.noteId),
+      req.auth!.id,
+      body
+    );
     res.json(result);
   })
 );
@@ -173,13 +177,17 @@ router.post(
   doctorAuth,
   asyncHandler(async (req, res) => {
     const body = soapSchema.parse(req.body);
-    const result = await notesService.upsertSoap(param(req.params.id), {
-      subjective: body.subjective ?? '',
-      objective: body.objective ?? '',
-      assessment: body.assessment ?? '',
-      plan: body.plan ?? '',
-      action: body.action,
-    });
+    const result = await notesService.upsertSoap(
+      param(req.params.id),
+      req.auth!.id,
+      {
+        subjective: body.subjective ?? '',
+        objective: body.objective ?? '',
+        assessment: body.assessment ?? '',
+        plan: body.plan ?? '',
+        action: body.action,
+      }
+    );
     res.status(201).json(result);
   })
 );
@@ -189,7 +197,11 @@ router.post(
   doctorAuth,
   asyncHandler(async (req, res) => {
     const body = sharePlanSchema.parse(req.body ?? {});
-    const result = await notesService.sharePlan(param(req.params.id), body);
+    const result = await notesService.sharePlan(
+      param(req.params.id),
+      req.auth!.id,
+      body
+    );
     res.json(result);
   })
 );
@@ -209,7 +221,10 @@ router.post(
   '/:id/complete',
   doctorAuth,
   asyncHandler(async (req, res) => {
-    const result = await notesService.completeConsultation(param(req.params.id));
+    const result = await notesService.completeConsultation(
+      param(req.params.id),
+      req.auth!.id
+    );
     res.json(result);
   })
 );

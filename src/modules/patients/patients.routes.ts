@@ -6,7 +6,6 @@ import {
   searchQuerySchema,
   registerPatientSchema,
   updatePatientSchema,
-  assignPatientSchema,
   verifyCodeSchema,
 } from './schemas';
 import { consentAgreementsSchema } from '../auth/schemas';
@@ -101,29 +100,6 @@ router.get(
   })
 );
 
-router.get(
-  '/unassigned',
-  staffAuth,
-  asyncHandler(async (req, res) => {
-    const query = searchQuerySchema.parse(req.query);
-    const result = await patientsService.listUnassignedPatients(query);
-    res.json(result);
-  })
-);
-
-router.post(
-  '/assign',
-  staffAuth,
-  asyncHandler(async (req, res) => {
-    const body = assignPatientSchema.parse(req.body);
-    const result = await patientsService.assignPatient(
-      body.patientId,
-      body.assistantId
-    );
-    res.json(result);
-  })
-);
-
 router.post(
   '/agreements',
   asyncHandler(async (req, res) => {
@@ -161,9 +137,7 @@ router.get(
   '/me',
   patientAuth,
   asyncHandler(async (req, res) => {
-    const patient = await Patient.findById(req.auth!.id).populate(
-      'assignedAssistantId'
-    );
+    const patient = await Patient.findById(req.auth!.id);
     if (!patient) throw new AppError('Patient not found', 404);
     res.json(serializePatient(patient));
   })
@@ -382,17 +356,6 @@ router.delete(
   staffAuth,
   asyncHandler(async (req, res) => {
     const result = await patientsService.softDeletePatient(param(req.params.id));
-    res.json(result);
-  })
-);
-
-router.delete(
-  '/:patientId/unassign',
-  staffAuth,
-  asyncHandler(async (req, res) => {
-    const result = await patientsService.unassignPatient(
-      param(req.params.patientId)
-    );
     res.json(result);
   })
 );

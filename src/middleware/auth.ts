@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/errors';
 import { verifyAccessToken, UserRole } from '../utils/tokens';
 import { env } from '../config/env';
+import { Doctor } from '../models/Doctor';
+import { asyncHandler } from '../utils/async-handler';
 
 export interface AuthUser {
   id: string;
@@ -35,6 +37,17 @@ export function requireAuth(...roles: UserRole[]) {
     }
   };
 }
+
+export const requireAdmin = asyncHandler(async (req, _res, next) => {
+  if (!req.auth || req.auth.role !== 'doctor') {
+    throw new AppError('Forbidden', 403);
+  }
+  const doctor = await Doctor.findById(req.auth.id);
+  if (!doctor?.isAdmin || !doctor.isActive) {
+    throw new AppError('Forbidden', 403);
+  }
+  next();
+});
 
 export function requireCronSecret(
   req: Request,

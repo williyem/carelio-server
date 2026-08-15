@@ -48,11 +48,6 @@ export const updatePatientSchema = z
     message: 'At least one field is required',
   });
 
-export const assignPatientSchema = z.object({
-  patientId: z.string().min(1),
-  assistantId: z.string().min(1),
-});
-
 export const doctorInviteSchema = z.object({
   email: z.string().email(),
   phoneNumber: z.string().min(5).optional(),

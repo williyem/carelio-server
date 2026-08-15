@@ -35,6 +35,7 @@ export interface StaffDoc extends Document {
   pendingTotpSecret?: string;
   recoveryCodes: string[];
   isActive: boolean;
+  isAdmin?: boolean;
   resetOtpHash?: string;
   resetOtpExpiresAt?: Date;
   mustResetPassword?: boolean;
@@ -66,6 +67,7 @@ export function toStaffUser(user: StaffDoc) {
     twoFactorEnabled: user.twoFactorEnabled,
     twoFactorMethod: user.twoFactorMethod,
     isActive: user.isActive,
+    isAdmin: Boolean(user.isAdmin),
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
     ...serializeStaffProfile(user),

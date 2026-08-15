@@ -31,7 +31,6 @@ export interface IPatient extends Document {
   };
   chiefComplaint: string | null;
   invitedByDoctorId: Types.ObjectId | null;
-  assignedAssistantId: Types.ObjectId | null;
   isRegistrationComplete: boolean;
   isActive: boolean;
   phoneVerified: boolean;
@@ -95,11 +94,6 @@ const patientSchema = new Schema<IPatient>(
     invitedByDoctorId: {
       type: Schema.Types.ObjectId,
       ref: 'Doctor',
-      default: null,
-    },
-    assignedAssistantId: {
-      type: Schema.Types.ObjectId,
-      ref: 'HealthAssistant',
       default: null,
     },
     isRegistrationComplete: { type: Boolean, default: false },

@@ -18,6 +18,8 @@ export interface IDoctor extends Document, StaffProfileFields {
   pendingTotpSecret?: string;
   recoveryCodes: string[];
   isActive: boolean;
+  isAdmin: boolean;
+  mustResetPassword: boolean;
   resetOtpHash?: string;
   resetOtpExpiresAt?: Date;
   createdAt: Date;
@@ -43,6 +45,8 @@ const doctorSchema = new Schema<IDoctor>(
     pendingTotpSecret: { type: String },
     recoveryCodes: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
+    isAdmin: { type: Boolean, default: false },
+    mustResetPassword: { type: Boolean, default: false },
     resetOtpHash: { type: String },
     resetOtpExpiresAt: { type: Date },
     ...staffProfileSchemaFields,

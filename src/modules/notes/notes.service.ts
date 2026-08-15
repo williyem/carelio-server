@@ -9,6 +9,30 @@ function isoDate(value?: Date | null) {
   return value ? value.toISOString() : null;
 }
 
+function doctorIdOf(ref: unknown) {
+  if (!ref) return '';
+  if (typeof ref === 'string') return ref;
+  if (ref instanceof Types.ObjectId) return ref.toString();
+  if (typeof ref === 'object' && ref !== null && '_id' in ref) {
+    const id = (ref as { _id: unknown })._id;
+    if (id instanceof Types.ObjectId) return id.toString();
+    if (typeof id === 'string') return id;
+  }
+  return String(ref);
+}
+
+function assertAppointmentDoctor(
+  appointment: { doctorId: unknown },
+  doctorId: string
+) {
+  if (doctorIdOf(appointment.doctorId) !== doctorId) {
+    throw new AppError(
+      'Only the doctor for this appointment can manage the consultation note',
+      403
+    );
+  }
+}
+
 const SOAP_FIELDS = ['subjective', 'objective', 'assessment', 'plan'] as const;
 type SoapField = (typeof SOAP_FIELDS)[number];
 
@@ -284,6 +308,7 @@ export async function listPatientNotes(
 
 export async function upsertSoap(
   appointmentId: string,
+  doctorId: string,
   input: {
     subjective: string;
     objective: string;
@@ -294,6 +319,7 @@ export async function upsertSoap(
 ) {
   const appointment = await Appointment.findById(appointmentId);
   if (!appointment) throw new AppError('Appointment not found', 404);
+  assertAppointmentDoctor(appointment, doctorId);
 
   const existing = await ConsultationNote.findOne({
     appointmentId: appointment._id,
@@ -327,6 +353,7 @@ export async function upsertSoap(
 
 export async function updateNote(
   noteId: string,
+  doctorId: string,
   input: {
     subjective?: string;
     objective?: string;
@@ -337,6 +364,7 @@ export async function updateNote(
 ) {
   const note = await ConsultationNote.findById(noteId);
   if (!note) throw new AppError('Note not found', 404);
+  assertAppointmentDoctor(note, doctorId);
 
   if (note.status === 'FINAL') {
     if (input.action === 'approve') return serializeNote(note);
@@ -358,6 +386,7 @@ export async function updateNote(
 
 export async function sharePlan(
   appointmentId: string,
+  doctorId: string,
   input: {
     recipients?: Array<'patient' | 'healthAssistant'>;
     fields?: SoapField[];
@@ -366,8 +395,12 @@ export async function sharePlan(
   if (!Types.ObjectId.isValid(appointmentId)) {
     throw new AppError('Appointment not found', 404);
   }
+  const appointment = await Appointment.findById(appointmentId);
+  if (!appointment) throw new AppError('Appointment not found', 404);
+  assertAppointmentDoctor(appointment, doctorId);
+
   const note = await ConsultationNote.findOne({
-    appointmentId: new Types.ObjectId(appointmentId),
+    appointmentId: appointment._id,
   });
   if (!note) throw new AppError('Note not found', 404);
 
@@ -399,6 +432,8 @@ export async function sharePlan(
       note.sharedSoapFieldsPatient,
       fields
     );
+    // Sharing with the patient locks the note as the care record.
+    note.status = 'FINAL';
   }
   if (recipients.includes('healthAssistant')) {
     note.planSharedWithHealthAssistantAt = now;
@@ -412,11 +447,15 @@ export async function sharePlan(
   return serializeNote(note);
 }
 
-export async function completeConsultation(appointmentId: string) {
+export async function completeConsultation(
+  appointmentId: string,
+  doctorId: string
+) {
   const appointment = await Appointment.findById(appointmentId)
     .populate('doctorId')
     .populate('patientId');
   if (!appointment) throw new AppError('Appointment not found', 404);
+  assertAppointmentDoctor(appointment, doctorId);
   if (appointment.status === 'CANCELLED' || appointment.status === 'MISSED') {
     throw new AppError(
       `Cannot complete a ${appointment.status.toLowerCase()} appointment`,

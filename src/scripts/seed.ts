@@ -20,6 +20,28 @@ async function seed() {
       phoneNumber: '+233200000001',
       twoFactorEnabled: false,
       isActive: true,
+      isAdmin: false,
+      mustResetPassword: false,
+    },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+  );
+
+  const adminEmail = 'admin@carelio.app';
+  const admin = await Doctor.findOneAndUpdate(
+    { email: adminEmail },
+    {
+      email: adminEmail,
+      passwordHash,
+      firstName: 'Carelio',
+      lastName: 'Admin',
+      phoneNumber: '+233200000000',
+      twoFactorEnabled: false,
+      isActive: true,
+      isAdmin: true,
+      mustResetPassword: false,
+      title: 'Super admin',
+      clinicName: 'Carelio Clinic',
+      onboardingCompletedAt: new Date(),
     },
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
@@ -65,7 +87,6 @@ async function seed() {
         phone: '+233200000010',
       },
       chiefComplaint: 'Recurring headaches',
-      assignedAssistantId: ha._id,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: true,
@@ -89,7 +110,6 @@ async function seed() {
         phone: '+233201111111',
       },
       chiefComplaint: 'Fatigue',
-      assignedAssistantId: ha._id,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: true,
@@ -113,7 +133,6 @@ async function seed() {
         phone: '+233209999999',
       },
       chiefComplaint: 'Anxiety',
-      assignedAssistantId: null,
       isRegistrationComplete: true,
       phoneVerified: true,
       emailVerified: false,
@@ -130,7 +149,6 @@ async function seed() {
       bloodType: null,
       allergies: [],
       chiefComplaint: null,
-      assignedAssistantId: null,
       isRegistrationComplete: false,
       phoneVerified: false,
       emailVerified: false,
@@ -142,9 +160,12 @@ async function seed() {
     const p = await Patient.findOneAndUpdate(
       { patientId: data.patientId },
       {
-        ...data,
-        invitedByDoctorId: doctor._id,
-        isActive: true,
+        $set: {
+          ...data,
+          invitedByDoctorId: doctor._id,
+          isActive: true,
+        },
+        $unset: { assignedAssistantId: '' },
       },
       { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
@@ -209,6 +230,7 @@ async function seed() {
   }
 
   console.log('Seed complete:');
+  console.log(`  Super admin: ${admin.email} / ${password}`);
   console.log(`  Doctor: ${doctor.email} / ${password}`);
   console.log(`  Health Assistant: ${ha.email} / ${password} (${ha.staffCode})`);
   console.log(`  Patients: ${patients.map((p) => p.patientId).join(', ')}`);

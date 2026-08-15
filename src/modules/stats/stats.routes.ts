@@ -11,17 +11,14 @@ router.get(
   requireAuth('doctor', 'healthAssistant'),
   asyncHandler(async (req, res) => {
     if (req.auth!.role === 'healthAssistant') {
-      const [totalMedicalAssistants, totalPatients, unassignedPatients] =
-        await Promise.all([
-          HealthAssistant.countDocuments({ isActive: true }),
-          Patient.countDocuments({ isActive: true }),
-          Patient.countDocuments({ isActive: true, assignedAssistantId: null }),
-        ]);
+      const [totalMedicalAssistants, totalPatients] = await Promise.all([
+        HealthAssistant.countDocuments({ isActive: true }),
+        Patient.countDocuments({ isActive: true }),
+      ]);
 
       res.json({
         totalMedicalAssistants,
         totalPatients,
-        unassignedPatients,
       });
       return;
     }
