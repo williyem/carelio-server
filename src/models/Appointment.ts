@@ -47,6 +47,12 @@ export interface IAppointment extends Document {
   telehealth?: ITelehealthStub;
   deviceCaptureEnabled?: boolean;
   measurementRequests?: IMeasurementRequest[];
+  /** Doctor-only AI visit overview. Not exposed to patients. */
+  aiVisitSummary?: {
+    text: string;
+    generatedAt: Date;
+    generatedByDoctorId: Types.ObjectId | null;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -131,6 +137,18 @@ const appointmentSchema = new Schema<IAppointment>(
         },
       ],
       default: [],
+    },
+    aiVisitSummary: {
+      type: {
+        text: { type: String, required: true },
+        generatedAt: { type: Date, required: true },
+        generatedByDoctorId: {
+          type: Schema.Types.ObjectId,
+          ref: 'Doctor',
+          default: null,
+        },
+      },
+      default: null,
     },
   },
   { timestamps: true }
