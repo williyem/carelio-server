@@ -15,6 +15,7 @@ import patientAppointmentsRouter from '../appointments/patient-appointments.rout
 import * as notesService from '../notes/notes.service';
 import * as accessService from '../access/access.service';
 import * as billingService from '../billing/billing.service';
+import { summarizePatientNotes, getPatientAiSummary } from '../clinical-intelligence/ai-summary.service';
 import { z } from 'zod';
 import { Patient } from '../../models';
 import { AppError } from '../../utils/errors';
@@ -323,6 +324,46 @@ router.get(
       query,
       req.auth?.role
     );
+    res.json(result);
+  })
+);
+
+router.get(
+  '/:patientId/ai/summary',
+  requireAuth('doctor'),
+  asyncHandler(async (req, res) => {
+    await patientsService.requirePatientAccess(
+      param(req.params.patientId),
+      req.auth!
+    );
+    const result = await getPatientAiSummary(param(req.params.patientId));
+    if (!result) {
+      res.status(404).json({
+        message: 'No saved AI summary',
+        details: { code: 'NO_SUMMARY' },
+      });
+      return;
+    }
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:patientId/ai/summary',
+  requireAuth('doctor'),
+  asyncHandler(async (req, res) => {
+    await patientsService.requirePatientAccess(
+      param(req.params.patientId),
+      req.auth!
+    );
+    const body = z
+      .object({ regenerate: z.boolean().optional() })
+      .passthrough()
+      .parse(req.body ?? {});
+    const result = await summarizePatientNotes(param(req.params.patientId), {
+      regenerate: body.regenerate,
+      doctorId: req.auth!.id,
+    });
     res.json(result);
   })
 );

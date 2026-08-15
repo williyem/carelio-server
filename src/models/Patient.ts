@@ -59,6 +59,13 @@ export interface IPatient extends Document {
     isDefault: boolean;
     cardImageUrl?: string;
   }[];
+  /** Doctor-only AI overview of SOAP notes. Never exposed on patient portal. */
+  aiClinicalSummary?: {
+    text: string;
+    generatedAt: Date;
+    noteCount: number;
+    generatedByDoctorId: Types.ObjectId | null;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -132,6 +139,19 @@ const patientSchema = new Schema<IPatient>(
         },
       ],
       default: [],
+    },
+    aiClinicalSummary: {
+      type: {
+        text: { type: String, required: true },
+        generatedAt: { type: Date, required: true },
+        noteCount: { type: Number, default: 0 },
+        generatedByDoctorId: {
+          type: Schema.Types.ObjectId,
+          ref: 'Doctor',
+          default: null,
+        },
+      },
+      default: null,
     },
   },
   { timestamps: true }

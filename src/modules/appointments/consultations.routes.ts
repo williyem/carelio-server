@@ -12,6 +12,10 @@ import { z } from 'zod';
 import { mintLiveKitToken } from '../livekit/tokens';
 import type { UserRole } from '../../utils/tokens';
 import { extractMeasurements } from '../clinical-intelligence/clinical-intelligence.service';
+import {
+  getVisitAiSummary,
+  summarizeVisit,
+} from '../clinical-intelligence/ai-summary.service';
 import * as measurementRequestsService from '../clinical-intelligence/measurement-requests.service';
 import {
   confirmRequestsSchema,
@@ -263,6 +267,38 @@ router.post(
       strategy: extracted.strategy,
       degraded: extracted.degraded,
     });
+  })
+);
+
+router.get(
+  '/:id/ai/summary',
+  doctorAuth,
+  asyncHandler(async (req, res) => {
+    const result = await getVisitAiSummary(param(req.params.id));
+    if (!result) {
+      res.status(404).json({
+        message: 'No saved AI visit summary',
+        details: { code: 'NO_SUMMARY' },
+      });
+      return;
+    }
+    res.json(result);
+  })
+);
+
+router.post(
+  '/:id/ai/summary',
+  doctorAuth,
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({ regenerate: z.boolean().optional() })
+      .passthrough()
+      .parse(req.body ?? {});
+    const result = await summarizeVisit(param(req.params.id), {
+      regenerate: body.regenerate,
+      doctorId: req.auth!.id,
+    });
+    res.json(result);
   })
 );
 
