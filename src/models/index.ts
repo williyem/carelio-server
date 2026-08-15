@@ -29,3 +29,9 @@ export {
   type DoctorAccessRequestStatus,
 } from './DoctorAccessRequest';
 export { BillingProfile, type IBillingProfile } from './BillingProfile';
+export {
+  DeviceGuide,
+  type IDeviceGuide,
+  type DeviceGuideSlug,
+  DEVICE_GUIDE_SLUGS,
+} from './DeviceGuide';

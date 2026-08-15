@@ -2,10 +2,11 @@ import { connectDb } from '../db/connect';
 import { Doctor, HealthAssistant, Patient, Appointment } from '../models';
 import { hashPassword } from '../utils/passwords';
 import { generateAppointmentCode } from '../utils/ids';
+import { seedDeviceGuides } from '../modules/device-guides/device-guides.service';
 
 async function seed() {
   await connectDb();
-
+  await seedDeviceGuides();
   const doctorEmail = 'dr.smith@carelio.app';
   const password = 'Password123!';
   const passwordHash = await hashPassword(password);

@@ -4,7 +4,11 @@ import { requireAuth, requireAdmin } from '../../middleware/auth';
 import { param } from '../../utils/params';
 import { createStaffSchema, setActiveSchema } from './schemas';
 import * as adminService from './admin.service';
-
+import * as deviceGuidesService from '../device-guides/device-guides.service';
+import {
+  deviceGuideCreateSchema,
+  deviceGuidePatchSchema,
+} from '../device-guides/device-guides.routes';
 const router = Router();
 const adminAuth = [requireAuth('doctor'), requireAdmin];
 
@@ -91,6 +95,46 @@ router.patch(
       param(req.params.id),
       body.isActive
     );
+    res.json(result);
+  })
+);
+
+router.get(
+  '/device-guides',
+  ...adminAuth,
+  asyncHandler(async (_req, res) => {
+    const guides = await deviceGuidesService.listAllDeviceGuides();
+    res.json({ guides });
+  })
+);
+
+router.post(
+  '/device-guides',
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const body = deviceGuideCreateSchema.parse(req.body);
+    const guide = await deviceGuidesService.createDeviceGuide(body);
+    res.status(201).json({ guide });
+  })
+);
+
+router.patch(
+  '/device-guides/:slug',
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const slug = param(req.params.slug);
+    const body = deviceGuidePatchSchema.parse(req.body);
+    const guide = await deviceGuidesService.updateDeviceGuide(slug, body);
+    res.json({ guide });
+  })
+);
+
+router.delete(
+  '/device-guides/:slug',
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const slug = param(req.params.slug);
+    const result = await deviceGuidesService.deleteDeviceGuide(slug);
     res.json(result);
   })
 );
